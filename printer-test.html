@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>POS Printer Test</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            width: 58mm;
+            margin: 0 auto;
+            padding: 8px;
+            text-align: center;
+        }
+
+        .line {
+            border-top: 1px dashed #000;
+            margin: 10px 0;
+        }
+
+        @media print {
+            @page {
+                size: 58mm auto;
+                margin: 2mm;
+            }
+
+            button {
+                display: none;
+            }
+
+            body {
+                width: 54mm;
+                margin: 0;
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Car Wash POS</h2>
+    <p>Receipt #000001</p>
+
+    <div class="line"></div>
+
+    <p>Service: V8</p>
+    <p>Payment: Cash</p>
+    <p>Supervisor: Khalid</p>
+
+    <div class="line"></div>
+
+    <h3>Total: $10.00</h3>
+    <p>Thank You</p>
+
+    <button onclick="window.print()">Print Test Receipt</button>
+</body>
+
+</html>
