@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
+import { after } from "next/server";
 import { z } from "zod";
 
 const input = z.object({
@@ -12,20 +12,17 @@ export async function POST(request: Request) {
   let username = "unknown";
   try {
     const data = input.parse(await request.json()); username = data.username;
-    const user = await prisma.user.findUnique({ where: { username }, select: { id: true, isActive: true } });
-    if (!user?.isActive) {
-      await audit({ userId: user?.id, action: "LOGIN_FAILED", entityType: "User", entityId: user?.id, newValues: { reason: "INVALID_OR_INACTIVE" } });
-      return Response.json({ message: "Invalid username or password." }, { status: 401 });
-    }
     const response = await auth.api.signInUsername({ body: data, headers: request.headers, asResponse: true });
     if (!response.ok) {
-      await audit({ userId: user.id, action: "LOGIN_FAILED", entityType: "User", entityId: user.id, newValues: { reason: "INVALID_CREDENTIALS" } });
+      after(() => audit({ action: "LOGIN_FAILED", entityType: "User", newValues: { username, reason: "INVALID_OR_INACTIVE" } }).catch(() => undefined));
       return Response.json({ message: "Invalid username or password." }, { status: response.status });
     }
-    await audit({ userId: user.id, action: "LOGIN_SUCCESS", entityType: "User", entityId: user.id });
+    const body = await response.clone().json() as { user?: { id?: string; role?: string } };
+    const userId = body.user?.id;
+    after(() => audit({ userId, action: "LOGIN_SUCCESS", entityType: "User", entityId: userId }).catch(() => undefined));
     return response;
   } catch {
-    await audit({ action: "LOGIN_FAILED", entityType: "User", newValues: { username, reason: "INVALID_REQUEST" } }).catch(() => undefined);
+    after(() => audit({ action: "LOGIN_FAILED", entityType: "User", newValues: { username, reason: "INVALID_REQUEST" } }).catch(() => undefined));
     return Response.json({ message: "Invalid username or password." }, { status: 401 });
   }
 }

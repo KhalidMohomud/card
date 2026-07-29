@@ -1,18 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { LockKeyhole, UserRound } from "lucide-react";
 
 export function LoginForm() {
-  const router = useRouter(); const [error, setError] = useState(""); const [pending, setPending] = useState(false);
+  const [error, setError] = useState(""); const [pending, setPending] = useState(false);
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(""); setPending(true);
     const form = new FormData(event.currentTarget);
     try {
       const response = await fetch("/api/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: form.get("username"), password: form.get("password") }) });
-      if (!response.ok) { const body = await response.json(); setError(body.message ?? "Sign in failed."); return; }
-      router.replace("/dashboard"); router.refresh();
+      const body = await response.json();
+      if (!response.ok) { setError(body.message ?? "Sign in failed."); return; }
+      window.location.replace(body.user?.role === "SUPERVISOR" ? "/pos" : "/dashboard");
     } catch { setError("Unable to reach the server. Check your connection."); }
     finally { setPending(false); }
   }

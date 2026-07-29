@@ -201,6 +201,7 @@ model Receipt {
   @@index([serviceId, issuedAt])
   @@index([status, issuedAt])
   @@index([paymentMethodId, issuedAt])
+  @@index([issuedAt])
 }
 
 model ReceiptReprint {
@@ -255,6 +256,7 @@ model Expense {
   @@index([type, expenseDate])
   @@index([supervisorUserId, expenseDate])
   @@index([status, expenseDate])
+  @@index([expenseDate, createdAt])
 }
 
 model Supplier {
@@ -349,6 +351,7 @@ model InventoryIssue {
 
   @@index([supervisorUserId, issueDate])
   @@index([status, issueDate])
+  @@index([issueDate])
 }
 
 model InventoryIssueItem {
@@ -385,7 +388,9 @@ model InventoryMovement {
   createdAt            DateTime              @default(now())
 
   @@index([inventoryItemId, createdAt])
+  @@index([inventoryIssueItemId, createdAt])
   @@index([movementType, createdAt])
+  @@index([createdAt])
 }
 
 model AuditLog {
@@ -404,4 +409,5 @@ model AuditLog {
   @@index([userId, createdAt])
   @@index([entityType, entityId])
   @@index([action, createdAt])
+  @@index([createdAt])
 }

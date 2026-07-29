@@ -11,22 +11,21 @@ export async function createReceipt(input: unknown, user: { id: string; role: Us
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       return await prisma.$transaction(async (tx) => {
-        const existing = await tx.receipt.findUnique({ where: { idempotencyKey: data.idempotencyKey } });
-        if (existing) {
-          if (existing.createdByUserId !== user.id) throw new Error("FORBIDDEN");
-          return existing;
-        }
-        const [service, paymentMethod] = await Promise.all([
-          tx.service.findFirst({ where: { id: data.serviceId, isActive: true } }),
-          tx.paymentMethod.findFirst({ where: { id: data.paymentMethodId, isActive: true } }),
-        ]);
-        if (!service || !paymentMethod) throw new Error("SERVICE_OR_PAYMENT_UNAVAILABLE");
+        const [service] = await tx.$queryRaw<{ id: string; name: string; price: Prisma.Decimal }[]>`
+          SELECT s.id, s.name, s.price
+          FROM "Service" s
+          INNER JOIN "PaymentMethod" pm
+            ON pm.id = ${data.paymentMethodId} AND pm."isActive" = true
+          WHERE s.id = ${data.serviceId} AND s."isActive" = true
+          LIMIT 1
+        `;
+        if (!service) throw new Error("SERVICE_OR_PAYMENT_UNAVAILABLE");
         const receipt = await tx.receipt.create({ data: receiptSnapshot(service, data, user.id) });
         await tx.auditLog.create({
           data: { userId: user.id, action: "RECEIPT_CREATED", entityType: "Receipt", entityId: String(receipt.id), newValues: { serviceId: service.id, amount: service.price.toFixed(2) } },
         });
         return receipt;
-      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         const existing = await prisma.receipt.findUnique({ where: { idempotencyKey: data.idempotencyKey } });

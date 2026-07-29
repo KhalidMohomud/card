@@ -83,6 +83,11 @@ textarea.input { min-height: 82px; resize: vertical; }
 .alert-success { background: #e6f6ee; color: #066843; border: 1px solid #bfe6d3; }
 .alert-error { background: #fff0f0; color: #a62b2b; border: 1px solid #f2caca; }
 .empty { padding: 42px 20px; text-align: center; color: var(--muted); }
+.loading-status { display: flex; align-items: center; gap: 13px; width: fit-content; padding: 15px 18px; color: var(--ink); }
+.loading-status p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+.loading-spinner { width: 18px; height: 18px; flex: 0 0 auto; border: 2px solid #b9d9ce; border-top-color: var(--brand); border-radius: 50%; animation: loading-spin .7s linear infinite; }
+@keyframes loading-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .loading-spinner { animation: none; } }
 .section-gap { margin-top: 20px; }
 .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .inline-form { display: flex; align-items: center; gap: 7px; }

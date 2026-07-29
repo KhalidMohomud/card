@@ -21,7 +21,9 @@ export const auth = betterAuth({
   session: {
     expiresIn: 60 * 60 * 12,
     updateAge: 60 * 60,
-    cookieCache: { enabled: false },
+    // Avoid a remote database lookup on every page transition. The short TTL
+    // keeps account-disable propagation bounded while making normal navigation instant.
+    cookieCache: { enabled: true, maxAge: 60, strategy: "compact" },
   },
   rateLimit: {
     enabled: true,

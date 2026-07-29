@@ -19,6 +19,32 @@ export async function getStock(db: Db, inventoryItemId: string, type?: Inventory
 }
 
 export async function stockSnapshot() {
-  const items = await prisma.inventoryItem.findMany({ where: { isActive: true }, include: { category: true }, orderBy: { name: "asc" } });
-  return Promise.all(items.map(async (item) => ({ ...item, ...(await getStock(prisma, item.id, item.type)) })));
+  const [items, movementGroups, issueGroups] = await Promise.all([
+    prisma.inventoryItem.findMany({ where: { isActive: true }, include: { category: true }, orderBy: { name: "asc" } }),
+    prisma.inventoryMovement.groupBy({ by: ["inventoryItemId", "movementType"], where: { inventoryItem: { isActive: true } }, _sum: { quantity: true } }),
+    prisma.inventoryIssueItem.groupBy({
+      by: ["inventoryItemId"],
+      where: { inventoryItem: { isActive: true, type: "REUSABLE" }, inventoryIssue: { status: { in: ["ISSUED", "CLOSED"] } } },
+      _sum: { quantityIssued: true, quantityReturned: true, quantityDamaged: true, quantityLost: true },
+    }),
+  ]);
+  const movementsByItem = new Map<string, { movementType: string; quantity: Prisma.Decimal }[]>();
+  for (const movement of movementGroups) {
+    const rows = movementsByItem.get(movement.inventoryItemId) ?? [];
+    rows.push({ movementType: movement.movementType, quantity: movement._sum.quantity ?? new Prisma.Decimal(0) });
+    movementsByItem.set(movement.inventoryItemId, rows);
+  }
+  const assignedByItem = new Map<string, Prisma.Decimal>();
+  for (const issue of issueGroups) {
+    const assigned = (issue._sum.quantityIssued ?? new Prisma.Decimal(0))
+      .sub(issue._sum.quantityReturned ?? new Prisma.Decimal(0))
+      .sub(issue._sum.quantityDamaged ?? new Prisma.Decimal(0))
+      .sub(issue._sum.quantityLost ?? new Prisma.Decimal(0));
+    assignedByItem.set(issue.inventoryItemId, assigned);
+  }
+  return items.map((item) => {
+    const owned = movementBalance(movementsByItem.get(item.id) ?? []);
+    const assigned = item.type === "REUSABLE" ? (assignedByItem.get(item.id) ?? new Prisma.Decimal(0)) : new Prisma.Decimal(0);
+    return { ...item, owned, assigned, available: owned.sub(assigned) };
+  });
 }

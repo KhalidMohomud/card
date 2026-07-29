@@ -1,0 +1,263 @@
+import "server-only";
+import { unstable_cache } from "next/cache";
+import { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { startOfMonth, startOfToday } from "@/lib/dates";
+import { stockSnapshot } from "@/modules/inventory/stock";
+
+export const CACHE_TAGS = {
+  audit: "swiftwash:audit",
+  catalog: "swiftwash:catalog",
+  dashboard: "swiftwash:dashboard",
+  expenses: "swiftwash:expenses",
+  inventory: "swiftwash:inventory",
+  issues: "swiftwash:issues",
+  purchases: "swiftwash:purchases",
+  receipts: "swiftwash:receipts",
+  reference: "swiftwash:reference",
+  reports: "swiftwash:reports",
+  supervisors: "swiftwash:supervisors",
+} as const;
+
+export const getCatalogData = unstable_cache(async () => {
+  const [services, methods, settings] = await Promise.all([
+    prisma.service.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, price: true, description: true, isActive: true } }),
+    prisma.paymentMethod.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, isActive: true } }),
+    prisma.businessSetting.findUnique({ where: { id: "singleton" }, select: { businessName: true, phone: true, email: true, address: true, currencyCode: true, receiptFooter: true, logoUrl: true } }),
+  ]);
+  return {
+    services: services.map((row) => ({ ...row, price: row.price.toFixed(2) })),
+    methods,
+    settings,
+  };
+}, ["swiftwash-catalog-v1"], { tags: [CACHE_TAGS.catalog], revalidate: 60 * 60 });
+
+export const getReferenceData = unstable_cache(async () => {
+  const [categories, suppliers, supervisors, inventoryItems] = await Promise.all([
+    prisma.inventoryCategory.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.supplier.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, phone: true, email: true, address: true } }),
+    prisma.user.findMany({ where: { role: "SUPERVISOR" }, orderBy: { fullName: "asc" }, select: { id: true, fullName: true, username: true, displayUsername: true, isActive: true } }),
+    prisma.inventoryItem.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, sku: true, type: true, unit: true, categoryId: true, minimumStockLevel: true } }),
+  ]);
+  return {
+    categories,
+    suppliers,
+    supervisors,
+    inventoryItems: inventoryItems.map((row) => ({ ...row, minimumStockLevel: row.minimumStockLevel.toString() })),
+  };
+}, ["swiftwash-reference-v1"], { tags: [CACHE_TAGS.reference], revalidate: 60 * 60 });
+
+export const getSupervisorAccounts = unstable_cache(async () => {
+  const users = await prisma.user.findMany({ where: { role: "SUPERVISOR" }, orderBy: { createdAt: "desc" }, select: { id: true, fullName: true, username: true, displayUsername: true, isActive: true, createdAt: true, _count: { select: { receiptsCreated: true } } } });
+  return users.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }));
+}, ["swiftwash-supervisor-accounts-v1"], { tags: [CACHE_TAGS.supervisors, CACHE_TAGS.reference], revalidate: 5 * 60 });
+
+const getReceiptLedgerForQuery = unstable_cache(async (statusValue: string, fromValue: string, toValue: string, page: number) => {
+  const status = statusValue === "COMPLETED" || statusValue === "CANCELLED" ? statusValue : undefined;
+  const where: Prisma.ReceiptWhereInput = {
+    ...(status ? { status } : {}),
+    ...(fromValue || toValue ? { issuedAt: { gte: fromValue ? new Date(`${fromValue}T00:00:00`) : undefined, lte: toValue ? new Date(`${toValue}T23:59:59.999`) : undefined } } : {}),
+  };
+  const take = 25;
+  const [rows, total] = await Promise.all([
+    prisma.receipt.findMany({
+      where,
+      orderBy: { id: "desc" },
+      skip: (page - 1) * take,
+      take,
+      select: { id: true, issuedAt: true, serviceNameSnapshot: true, servicePriceSnapshot: true, status: true, paymentMethod: { select: { name: true } }, createdByUser: { select: { fullName: true } } },
+    }),
+    prisma.receipt.count({ where }),
+  ]);
+  return {
+    total,
+    rows: rows.map((row) => ({ id: row.id, issuedAt: row.issuedAt.toISOString(), service: row.serviceNameSnapshot, total: row.servicePriceSnapshot.toFixed(2), status: row.status, payment: row.paymentMethod.name, supervisor: row.createdByUser.fullName })),
+  };
+}, ["swiftwash-receipt-ledger-v1"], { tags: [CACHE_TAGS.receipts, CACHE_TAGS.catalog], revalidate: 5 * 60 });
+
+export function getReceiptLedger(status: string | undefined, from: string | undefined, to: string | undefined, page: number) {
+  return getReceiptLedgerForQuery(status ?? "", from ?? "", to ?? "", page);
+}
+
+const getExpenseLedgerForPage = unstable_cache(async (page: number) => {
+  const take = 25;
+  const [rows, total] = await Promise.all([
+    prisma.expense.findMany({
+      orderBy: [{ expenseDate: "desc" }, { createdAt: "desc" }],
+      skip: (page - 1) * take,
+      take,
+      select: { id: true, expenseDate: true, type: true, title: true, amount: true, paymentStatus: true, status: true, carCount: true, ratePerCar: true, category: { select: { name: true } }, supervisor: { select: { fullName: true } } },
+    }),
+    prisma.expense.count(),
+  ]);
+  return {
+    total,
+    rows: rows.map((row) => ({ id: row.id, expenseDate: row.expenseDate.toISOString(), type: row.type, title: row.title, amount: row.amount.toFixed(2), paymentStatus: row.paymentStatus, status: row.status, carCount: row.carCount, ratePerCar: row.ratePerCar?.toFixed(2) ?? null, supervisor: row.supervisor, category: row.category })),
+  };
+}, ["swiftwash-expense-ledger-v1"], { tags: [CACHE_TAGS.expenses], revalidate: 5 * 60 });
+
+export function getExpenseLedger(page: number) {
+  return getExpenseLedgerForPage(page);
+}
+
+export const getPurchaseLedger = unstable_cache(async () => {
+  const rows = await prisma.purchase.findMany({
+    orderBy: { purchaseDate: "desc" },
+    take: 50,
+    select: { id: true, purchaseDate: true, supplierInvoiceNumber: true, status: true, supplier: { select: { name: true } }, items: { select: { id: true, quantity: true, unitCost: true, inventoryItem: { select: { name: true } } } } },
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    purchaseDate: row.purchaseDate.toISOString(),
+    supplier: row.supplier,
+    supplierInvoiceNumber: row.supplierInvoiceNumber,
+    status: row.status,
+    items: row.items.map((item) => ({ id: item.id, inventoryItem: item.inventoryItem, quantity: item.quantity.toString() })),
+    total: row.items.reduce((sum, item) => sum.add(item.quantity.mul(item.unitCost)), new Prisma.Decimal(0)).toFixed(2),
+  }));
+}, ["swiftwash-purchase-ledger-v1"], { tags: [CACHE_TAGS.purchases], revalidate: 5 * 60 });
+
+export const getIssueLedger = unstable_cache(async () => {
+  const rows = await prisma.inventoryIssue.findMany({
+    orderBy: { issueDate: "desc" },
+    take: 50,
+    select: { id: true, issueDate: true, status: true, supervisor: { select: { fullName: true } }, items: { select: { id: true, quantityIssued: true, inventoryItem: { select: { name: true, type: true } } } } },
+  });
+  return rows.map((row) => ({ id: row.id, issueDate: row.issueDate.toISOString(), status: row.status, supervisor: row.supervisor, items: row.items.map((item) => ({ id: item.id, quantityIssued: item.quantityIssued.toString(), inventoryItem: item.inventoryItem })) }));
+}, ["swiftwash-issue-ledger-v1"], { tags: [CACHE_TAGS.issues], revalidate: 5 * 60 });
+
+const getAuditLedgerForQuery = unstable_cache(async (action: string, entity: string, page: number) => {
+  const take = 50;
+  const where: Prisma.AuditLogWhereInput = { ...(action ? { action: { contains: action, mode: "insensitive" } } : {}), ...(entity ? { entityType: { contains: entity, mode: "insensitive" } } : {}) };
+  const [rows, total] = await Promise.all([
+    prisma.auditLog.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * take, take, select: { id: true, createdAt: true, action: true, entityType: true, entityId: true, newValues: true, user: { select: { fullName: true } } } }),
+    prisma.auditLog.count({ where }),
+  ]);
+  return { total, rows: rows.map((row) => ({ id: row.id, createdAt: row.createdAt.toISOString(), action: row.action, entityType: row.entityType, entityId: row.entityId, newValues: row.newValues, user: row.user })) };
+}, ["swiftwash-audit-ledger-v1"], { tags: [CACHE_TAGS.audit], revalidate: 15 });
+
+export function getAuditLedger(action: string | undefined, entity: string | undefined, page: number) {
+  return getAuditLedgerForQuery(action?.trim() ?? "", entity?.trim() ?? "", page);
+}
+
+export const getCachedStockSnapshot = unstable_cache(async () => {
+  const stock = await stockSnapshot();
+  return stock.map((row) => ({
+    id: row.id,
+    categoryId: row.categoryId,
+    category: { id: row.category.id, name: row.category.name },
+    sku: row.sku,
+    name: row.name,
+    type: row.type,
+    unit: row.unit,
+    description: row.description,
+    minimumStockLevel: row.minimumStockLevel.toString(),
+    owned: row.owned.toString(),
+    assigned: row.assigned.toString(),
+    available: row.available.toString(),
+    low: row.available.lessThanOrEqualTo(row.minimumStockLevel),
+  }));
+}, ["swiftwash-stock-v1"], { tags: [CACHE_TAGS.inventory], revalidate: 5 * 60 });
+
+const getDashboardSnapshotForPeriod = unstable_cache(async (todayIso: string, monthIso: string) => {
+  const today = new Date(todayIso); const month = new Date(monthIso);
+  const [todaySales, monthSales, recent, catalog, todayExpenses, monthExpenses, monthPurchases, stock, byPayment, byService, bySupervisor, movements, users] = await Promise.all([
+    prisma.receipt.aggregate({ where: { status: "COMPLETED", issuedAt: { gte: today } }, _count: true, _sum: { servicePriceSnapshot: true } }),
+    prisma.receipt.aggregate({ where: { status: "COMPLETED", issuedAt: { gte: month } }, _count: true, _sum: { servicePriceSnapshot: true } }),
+    prisma.receipt.findMany({ select: { id: true, serviceNameSnapshot: true, servicePriceSnapshot: true, issuedAt: true, createdByUser: { select: { fullName: true } } }, orderBy: { id: "desc" }, take: 7 }),
+    getCatalogData(),
+    prisma.expense.aggregate({ where: { status: "ACTIVE", expenseDate: { gte: today } }, _sum: { amount: true } }),
+    prisma.expense.aggregate({ where: { status: "ACTIVE", expenseDate: { gte: month } }, _sum: { amount: true } }),
+    prisma.purchaseItem.findMany({ where: { purchase: { status: "RECEIVED", purchaseDate: { gte: month } } }, select: { quantity: true, unitCost: true } }),
+    getCachedStockSnapshot(),
+    prisma.receipt.groupBy({ by: ["paymentMethodId"], where: { status: "COMPLETED", issuedAt: { gte: today } }, _count: true, _sum: { servicePriceSnapshot: true } }),
+    prisma.receipt.groupBy({ by: ["serviceNameSnapshot"], where: { status: "COMPLETED", issuedAt: { gte: today } }, _count: true, _sum: { servicePriceSnapshot: true } }),
+    prisma.receipt.groupBy({ by: ["createdByUserId"], where: { status: "COMPLETED", issuedAt: { gte: today } }, _count: true, _sum: { servicePriceSnapshot: true } }),
+    prisma.inventoryMovement.findMany({ select: { id: true, movementType: true, quantity: true, inventoryItem: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 6 }),
+    prisma.user.findMany({ select: { id: true, fullName: true } }),
+  ]);
+  const zero = new Prisma.Decimal(0);
+  const methodNames = new Map(catalog.methods.map((row) => [row.id, row.name]));
+  const userNames = new Map(users.map((row) => [row.id, row.fullName]));
+  const purchaseTotal = monthPurchases.reduce((total, row) => total.add(row.quantity.mul(row.unitCost)), zero);
+  return {
+    currency: catalog.settings?.currencyCode ?? "USD",
+    todaySales: { count: todaySales._count, total: (todaySales._sum.servicePriceSnapshot ?? zero).toFixed(2) },
+    monthSales: { count: monthSales._count, total: (monthSales._sum.servicePriceSnapshot ?? zero).toFixed(2) },
+    todayExpenses: (todayExpenses._sum.amount ?? zero).toFixed(2),
+    monthExpenses: (monthExpenses._sum.amount ?? zero).toFixed(2),
+    monthPurchases: purchaseTotal.toFixed(2),
+    recent: recent.map((row) => ({ id: row.id, service: row.serviceNameSnapshot, total: row.servicePriceSnapshot.toFixed(2), issuedAt: row.issuedAt.toISOString(), supervisor: row.createdByUser.fullName })),
+    stock,
+    byPayment: byPayment.map((row) => ({ name: methodNames.get(row.paymentMethodId) ?? "Unknown", count: row._count, total: (row._sum.servicePriceSnapshot ?? zero).toFixed(2) })),
+    byService: byService.map((row) => ({ name: row.serviceNameSnapshot, count: row._count, total: (row._sum.servicePriceSnapshot ?? zero).toFixed(2) })),
+    bySupervisor: bySupervisor.map((row) => ({ name: userNames.get(row.createdByUserId) ?? "Unknown", count: row._count, total: (row._sum.servicePriceSnapshot ?? zero).toFixed(2) })),
+    movements: movements.map((row) => ({ id: row.id, item: row.inventoryItem.name, type: row.movementType, quantity: row.quantity.toString() })),
+  };
+}, ["swiftwash-dashboard-v1"], { tags: [CACHE_TAGS.dashboard, CACHE_TAGS.catalog, CACHE_TAGS.inventory], revalidate: 5 * 60 });
+
+export function getDashboardSnapshot() {
+  return getDashboardSnapshotForPeriod(startOfToday().toISOString(), startOfMonth().toISOString());
+}
+
+const getReportSnapshotForRange = unstable_cache(async (startIso: string, endIso: string, supervisorId: string) => {
+  const start = new Date(startIso); const end = new Date(endIso); const selectedId = supervisorId || undefined;
+  const receiptWhere: Prisma.ReceiptWhereInput = { issuedAt: { gte: start, lte: end }, ...(selectedId ? { createdByUserId: selectedId } : {}) };
+  const completedReceiptWhere: Prisma.ReceiptWhereInput = { ...receiptWhere, status: "COMPLETED" };
+  const expenseWhere: Prisma.ExpenseWhereInput = { expenseDate: { gte: start, lte: end }, ...(selectedId ? { supervisorUserId: selectedId } : {}) };
+  const paidExpenseWhere: Prisma.ExpenseWhereInput = { ...expenseWhere, status: "ACTIVE", paymentStatus: "PAID" };
+  const movementWhere: Prisma.InventoryMovementWhereInput = { createdAt: { gte: start, lte: end }, ...(selectedId ? { inventoryIssueItem: { inventoryIssue: { supervisorUserId: selectedId } } } : {}) };
+  const issueWhere: Prisma.InventoryIssueWhereInput = { issueDate: { gte: start, lte: end }, ...(selectedId ? { supervisorUserId: selectedId } : {}) };
+  const [receipts, expenses, purchaseSummary, movements, issueCount, stock, catalog, salesSummary, expenseSummary, serviceGroups, supervisorGroups, paymentGroups, users] = await Promise.all([
+    prisma.receipt.findMany({ where: receiptWhere, select: { id: true, issuedAt: true, serviceNameSnapshot: true, servicePriceSnapshot: true, status: true, createdByUser: { select: { fullName: true } } }, orderBy: { issuedAt: "desc" }, take: 25 }),
+    prisma.expense.findMany({ where: expenseWhere, select: { id: true, expenseDate: true, type: true, title: true, amount: true, status: true }, orderBy: { expenseDate: "desc" }, take: 25 }),
+    selectedId ? Promise.resolve({ count: 0, total: "0.00" }) : getPurchaseSummary(start, end),
+    prisma.inventoryMovement.findMany({ where: movementWhere, select: { id: true, createdAt: true, movementType: true, quantity: true, inventoryItem: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 25 }),
+    prisma.inventoryIssue.count({ where: issueWhere }),
+    getCachedStockSnapshot(),
+    getCatalogData(),
+    prisma.receipt.aggregate({ where: completedReceiptWhere, _count: true, _sum: { servicePriceSnapshot: true } }),
+    prisma.expense.aggregate({ where: paidExpenseWhere, _count: true, _sum: { amount: true } }),
+    prisma.receipt.groupBy({ by: ["serviceNameSnapshot"], where: completedReceiptWhere, _count: true, _sum: { servicePriceSnapshot: true } }),
+    prisma.receipt.groupBy({ by: ["createdByUserId"], where: completedReceiptWhere, _count: true, _sum: { servicePriceSnapshot: true } }),
+    prisma.receipt.groupBy({ by: ["paymentMethodId"], where: completedReceiptWhere, _count: true, _sum: { servicePriceSnapshot: true } }),
+    prisma.user.findMany({ select: { id: true, fullName: true } }),
+  ]);
+  const zero = new Prisma.Decimal(0);
+  const sales = salesSummary._sum.servicePriceSnapshot ?? zero;
+  const expenseTotal = expenseSummary._sum.amount ?? zero;
+  const purchaseTotal = new Prisma.Decimal(purchaseSummary.total);
+  const userNames = new Map(users.map((row) => [row.id, row.fullName]));
+  const methodNames = new Map(catalog.methods.map((row) => [row.id, row.name]));
+  return {
+    currency: catalog.settings?.currencyCode ?? "USD",
+    sales: { count: salesSummary._count, total: sales.toFixed(2) },
+    expenses: { count: expenseSummary._count, total: expenseTotal.toFixed(2) },
+    purchases: purchaseSummary,
+    cash: sales.sub(expenseTotal).sub(purchaseTotal).toFixed(2),
+    receipts: receipts.map((row) => ({ id: row.id, issuedAt: row.issuedAt.toISOString(), service: row.serviceNameSnapshot, supervisor: row.createdByUser.fullName, total: row.servicePriceSnapshot.toFixed(2), status: row.status })),
+    expenseRows: expenses.map((row) => ({ id: row.id, expenseDate: row.expenseDate.toISOString(), type: row.type, title: row.title, amount: row.amount.toFixed(2), status: row.status })),
+    movements: movements.map((row) => ({ id: row.id, createdAt: row.createdAt.toISOString(), item: row.inventoryItem.name, type: row.movementType, quantity: row.quantity.toString() })),
+    issueCount,
+    stock,
+    byService: serviceGroups.map((row) => ({ name: row.serviceNameSnapshot, count: row._count, total: (row._sum.servicePriceSnapshot ?? zero).toFixed(2) })),
+    bySupervisor: supervisorGroups.map((row) => ({ name: userNames.get(row.createdByUserId) ?? "Unknown", count: row._count, total: (row._sum.servicePriceSnapshot ?? zero).toFixed(2) })),
+    byPayment: paymentGroups.map((row) => ({ name: methodNames.get(row.paymentMethodId) ?? "Unknown", count: row._count, total: (row._sum.servicePriceSnapshot ?? zero).toFixed(2) })),
+  };
+}, ["swiftwash-report-v1"], { tags: [CACHE_TAGS.reports, CACHE_TAGS.catalog, CACHE_TAGS.inventory], revalidate: 5 * 60 });
+
+async function getPurchaseSummary(start: Date, end: Date) {
+  const rows = await prisma.$queryRaw<{ count: bigint; total: Prisma.Decimal | null }[]>`
+    SELECT COUNT(*)::bigint AS count, COALESCE(SUM(pi.quantity * pi."unitCost"), 0) AS total
+    FROM "PurchaseItem" pi
+    INNER JOIN "Purchase" p ON p.id = pi."purchaseId"
+    WHERE p.status = 'RECEIVED'::"PurchaseStatus"
+      AND p."purchaseDate" >= ${start}
+      AND p."purchaseDate" <= ${end}
+  `;
+  return { count: Number(rows[0]?.count ?? 0), total: (rows[0]?.total ?? new Prisma.Decimal(0)).toFixed(2) };
+}
+
+export function getReportSnapshot(start: Date, end: Date, supervisorId?: string) {
+  return getReportSnapshotForRange(start.toISOString(), end.toISOString(), supervisorId ?? "");
+}
