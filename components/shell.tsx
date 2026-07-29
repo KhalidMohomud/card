@@ -1,0 +1,25 @@
+import Link from "next/link";
+import { BarChart3, Boxes, Droplets, FileClock, Gauge, HandCoins, LayoutDashboard, PackagePlus, ReceiptText, Settings, ShieldCheck, ShoppingCart, UsersRound } from "lucide-react";
+import type { UserRole } from "@prisma/client";
+import { LogoutButton } from "@/components/logout-button";
+
+const adminLinks = [
+  ["Dashboard", "/dashboard", LayoutDashboard], ["POS", "/pos", ShoppingCart], ["Receipts", "/receipts", ReceiptText],
+  ["Services", "/services", Droplets], ["Supervisors", "/supervisors", UsersRound], ["Expenses", "/expenses", HandCoins],
+  ["Inventory", "/inventory", Boxes], ["Purchases", "/purchases", PackagePlus], ["Reports", "/reports", BarChart3],
+  ["Settings", "/settings", Settings], ["Audit logs", "/audit-logs", FileClock],
+] as const;
+const supervisorLinks = [["Dashboard", "/dashboard", LayoutDashboard], ["Open POS", "/pos", ShoppingCart], ["Today's receipts", "/receipts", ReceiptText]] as const;
+
+export function Shell({ user, children }: { user: { fullName: string; role: UserRole }; children: React.ReactNode }) {
+  const links = user.role === "ADMIN" ? adminLinks : supervisorLinks;
+  return <div className="app-shell">
+    <aside className="sidebar">
+      <Link className="brand" href="/dashboard"><span className="brand-mark"><Droplets size={23} /></span><span><strong>SwiftWash</strong><small>Operations POS</small></span></Link>
+      <nav className="nav">{links.map(([label, href, Icon]) => <Link className="nav-link" href={href} key={href}><Icon size={18} />{label}</Link>)}</nav>
+      <div className="sidebar-user"><strong>{user.fullName}</strong><small>{user.role.toLowerCase()}</small><LogoutButton /></div>
+    </aside>
+    <main className="main"><header className="topbar"><div><p>Car wash operations</p><strong>Single-store control centre</strong></div><span className="badge success"><ShieldCheck size={12} /> Secure session</span></header>{children}</main>
+    <nav className="mobile-nav">{links.slice(0, 4).map(([label, href, Icon]) => <Link href={href} key={href}><Icon size={18} />{label}</Link>)}<Link href="/dashboard"><Gauge size={18} />More</Link></nav>
+  </div>;
+}

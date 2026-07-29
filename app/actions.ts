@@ -1,0 +1,165 @@
+"use server";
+
+import { hashPassword } from "better-auth/crypto";
+import { Prisma } from "@prisma/client";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { requireAdmin, requireUser } from "@/lib/session";
+import { cancellationInput, inventoryItemInput, paymentMethodInput, serviceInput, settingsInput, supervisorInput, supplierInput } from "@/lib/validation";
+import { cancelReceipt, recordReprint } from "@/modules/receipts/service";
+import { createExpense, cancelExpense } from "@/modules/expenses/service";
+import { adjustStock, closeInventoryIssue, issueInventory } from "@/modules/inventory/service";
+import { createPurchase, receivePurchase } from "@/modules/purchases/service";
+
+function value(form: FormData, key: string) { return String(form.get(key) ?? ""); }
+function optionalDate(form: FormData, key: string) { const v = value(form, key); return v ? new Date(`${v}T00:00:00`) : undefined; }
+function errorMessage(error: unknown) {
+  if (!(error instanceof Error)) return "The request could not be completed.";
+  if (error.message.startsWith("OVERRIDE_REQUIRED:")) return `Commission exceeds the ${error.message.split(":")[1]} completed receipts. Add an override reason to continue.`;
+  const messages: Record<string, string> = {
+    INSUFFICIENT_STOCK: "Not enough available stock.", PURCHASE_NOT_RECEIVABLE: "This purchase has already been received or is not ready.",
+    REUSABLE_ITEMS_MUST_BE_ACCOUNTED_FOR: "All reusable items must be returned, damaged, or lost before closing.",
+    QUANTITY_EXCEEDS_ISSUED: "Returned, damaged, and lost quantities exceed the issued quantity.",
+  };
+  return messages[error.message] ?? "Check the form values and try again.";
+}
+
+export async function createServiceAction(form: FormData) {
+  const admin = await requireAdmin();
+  try {
+    const data = serviceInput.parse({ name: value(form, "name"), price: value(form, "price"), description: value(form, "description") });
+    const service = await prisma.service.create({ data: { ...data, price: new Prisma.Decimal(data.price) } });
+    await prisma.auditLog.create({ data: { userId: admin.id, action: "SERVICE_CREATED", entityType: "Service", entityId: service.id } });
+  } catch { redirect("/services?error=Unable+to+create+service"); }
+  revalidatePath("/services"); redirect("/services?success=Service+created");
+}
+
+export async function updateServiceAction(form: FormData) {
+  const admin = await requireAdmin(); const id = value(form, "id");
+  const current = await prisma.service.findUnique({ where: { id } });
+  if (!current) redirect("/services?error=Service+not+found");
+  const price = new Prisma.Decimal(value(form, "price"));
+  await prisma.$transaction(async (tx) => {
+    await tx.service.update({ where: { id }, data: { price, isActive: value(form, "isActive") === "true" } });
+    if (!current.price.equals(price)) await tx.auditLog.create({ data: { userId: admin.id, action: "SERVICE_PRICE_CHANGED", entityType: "Service", entityId: id, oldValues: { price: current.price.toFixed(2) }, newValues: { price: price.toFixed(2) } } });
+  });
+  revalidatePath("/services"); redirect("/services?success=Service+updated");
+}
+
+export async function createPaymentMethodAction(form: FormData) {
+  const admin = await requireAdmin(); const data = paymentMethodInput.parse({ name: value(form, "name") });
+  const method = await prisma.paymentMethod.create({ data });
+  await prisma.auditLog.create({ data: { userId: admin.id, action: "PAYMENT_METHOD_CREATED", entityType: "PaymentMethod", entityId: method.id } });
+  revalidatePath("/services"); redirect("/services?success=Payment+method+created");
+}
+
+export async function togglePaymentMethodAction(form: FormData) {
+  await requireAdmin(); await prisma.paymentMethod.update({ where: { id: value(form, "id") }, data: { isActive: value(form, "isActive") === "true" } });
+  revalidatePath("/services");
+}
+
+export async function createSupervisorAction(form: FormData) {
+  const admin = await requireAdmin();
+  try {
+    const data = supervisorInput.parse({ fullName: value(form, "fullName"), username: value(form, "username"), password: value(form, "password") });
+    const username = data.username.toLowerCase(); const password = await hashPassword(data.password);
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({ data: { name: data.fullName, fullName: data.fullName, email: `${username}@users.swiftwash.invalid`, username, displayUsername: data.username, role: "SUPERVISOR" } });
+      await tx.account.create({ data: { providerId: "credential", accountId: user.id, userId: user.id, password } });
+      await tx.auditLog.create({ data: { userId: admin.id, action: "USER_CREATED", entityType: "User", entityId: user.id, newValues: { role: "SUPERVISOR", username } } });
+    });
+  } catch { redirect("/supervisors?error=Username+may+already+exist+or+the+form+is+invalid"); }
+  revalidatePath("/supervisors"); redirect("/supervisors?success=Supervisor+created");
+}
+
+export async function toggleSupervisorAction(form: FormData) {
+  const admin = await requireAdmin(); const id = value(form, "id"); const isActive = value(form, "isActive") === "true";
+  await prisma.$transaction([prisma.user.update({ where: { id }, data: { isActive } }), prisma.session.deleteMany({ where: { userId: id } }), prisma.auditLog.create({ data: { userId: admin.id, action: isActive ? "USER_ENABLED" : "USER_DISABLED", entityType: "User", entityId: id } })]);
+  revalidatePath("/supervisors");
+}
+
+export async function cancelReceiptAction(form: FormData) {
+  const admin = await requireAdmin();
+  try { const data = cancellationInput.parse({ id: value(form, "id"), reason: value(form, "reason") }); await cancelReceipt(data.id, data.reason, admin); }
+  catch { redirect("/receipts?error=Receipt+could+not+be+cancelled"); }
+  revalidatePath("/receipts"); redirect("/receipts?success=Receipt+cancelled");
+}
+
+export async function reprintReceiptAction(form: FormData) {
+  const user = await requireUser(); const id = Number(value(form, "id")); await recordReprint(id, user); redirect(`/receipts/${id}/print?autoprint=1`);
+}
+
+export async function createExpenseAction(form: FormData) {
+  const admin = await requireAdmin();
+  try {
+    await createExpense({ type: value(form, "type"), title: value(form, "title"), expenseDate: new Date(`${value(form, "expenseDate")}T00:00:00`), categoryId: value(form, "categoryId"), supervisorUserId: value(form, "supervisorUserId"), paymentMethodId: value(form, "paymentMethodId"), paymentStatus: value(form, "paymentStatus"), amount: value(form, "amount") || undefined, carCount: value(form, "carCount") || undefined, ratePerCar: value(form, "ratePerCar") || undefined, periodStart: optionalDate(form, "periodStart"), periodEnd: optionalDate(form, "periodEnd"), paymentReference: value(form, "paymentReference"), notes: value(form, "notes"), overrideReason: value(form, "overrideReason") }, admin.id);
+  } catch (error) { redirect(`/expenses?error=${encodeURIComponent(errorMessage(error))}`); }
+  revalidatePath("/expenses"); redirect("/expenses?success=Expense+recorded");
+}
+
+export async function cancelExpenseAction(form: FormData) {
+  const admin = await requireAdmin();
+  try { await cancelExpense(value(form, "id"), value(form, "reason"), admin.id); } catch { redirect("/expenses?error=Expense+could+not+be+cancelled"); }
+  revalidatePath("/expenses"); redirect("/expenses?success=Expense+cancelled");
+}
+
+export async function createSupplierAction(form: FormData) {
+  const admin = await requireAdmin(); const data = supplierInput.parse({ name: value(form, "name"), phone: value(form, "phone"), email: value(form, "email"), address: value(form, "address") });
+  const row = await prisma.supplier.create({ data: { ...data, email: data.email || undefined } });
+  await prisma.auditLog.create({ data: { userId: admin.id, action: "SUPPLIER_CREATED", entityType: "Supplier", entityId: row.id } });
+  revalidatePath("/inventory"); redirect("/inventory?success=Supplier+created");
+}
+
+export async function createInventoryCategoryAction(form: FormData) {
+  await requireAdmin(); await prisma.inventoryCategory.create({ data: { name: value(form, "name").trim() } }); revalidatePath("/inventory"); redirect("/inventory?success=Category+created");
+}
+
+export async function createInventoryItemAction(form: FormData) {
+  const admin = await requireAdmin(); const data = inventoryItemInput.parse({ categoryId: value(form, "categoryId"), sku: value(form, "sku"), name: value(form, "name"), type: value(form, "type"), unit: value(form, "unit"), minimumStockLevel: value(form, "minimumStockLevel"), description: value(form, "description") });
+  const item = await prisma.inventoryItem.create({ data: { ...data, minimumStockLevel: new Prisma.Decimal(data.minimumStockLevel) } });
+  await prisma.auditLog.create({ data: { userId: admin.id, action: "INVENTORY_ITEM_CREATED", entityType: "InventoryItem", entityId: item.id } });
+  revalidatePath("/inventory"); redirect("/inventory?success=Inventory+item+created");
+}
+
+export async function adjustStockAction(form: FormData) {
+  const admin = await requireAdmin();
+  try { await adjustStock({ inventoryItemId: value(form, "inventoryItemId"), direction: value(form, "direction"), quantity: value(form, "quantity"), reason: value(form, "reason") }, admin.id); }
+  catch (error) { redirect(`/inventory?error=${encodeURIComponent(errorMessage(error))}`); }
+  revalidatePath("/inventory"); redirect("/inventory?success=Stock+adjusted");
+}
+
+export async function createPurchaseAction(form: FormData) {
+  const admin = await requireAdmin();
+  try { await createPurchase({ supplierId: value(form, "supplierId"), paymentMethodId: value(form, "paymentMethodId"), supplierInvoiceNumber: value(form, "supplierInvoiceNumber"), purchaseDate: new Date(`${value(form, "purchaseDate")}T00:00:00`), paymentStatus: value(form, "paymentStatus"), inventoryItemId: value(form, "inventoryItemId"), quantity: value(form, "quantity"), unitCost: value(form, "unitCost"), notes: value(form, "notes") }, admin.id); }
+  catch { redirect("/purchases?error=Purchase+could+not+be+created"); }
+  revalidatePath("/purchases"); redirect("/purchases?success=Draft+purchase+created");
+}
+
+export async function receivePurchaseAction(form: FormData) {
+  const admin = await requireAdmin();
+  try { await receivePurchase(value(form, "id"), admin.id); } catch (error) { redirect(`/purchases?error=${encodeURIComponent(errorMessage(error))}`); }
+  revalidatePath("/purchases"); redirect("/purchases?success=Purchase+received+and+stock+updated");
+}
+
+export async function issueInventoryAction(form: FormData) {
+  const admin = await requireAdmin();
+  try { await issueInventory({ supervisorUserId: value(form, "supervisorUserId"), issueDate: new Date(`${value(form, "issueDate")}T00:00:00`), inventoryItemId: value(form, "inventoryItemId"), quantity: value(form, "quantity"), notes: value(form, "notes") }, admin.id); }
+  catch (error) { redirect(`/inventory/issues?error=${encodeURIComponent(errorMessage(error))}`); }
+  revalidatePath("/inventory/issues"); redirect("/inventory/issues?success=Inventory+issued");
+}
+
+export async function closeIssueAction(form: FormData) {
+  const admin = await requireAdmin();
+  try { await closeInventoryIssue({ issueItemId: value(form, "issueItemId"), returned: value(form, "returned") || "0", damaged: value(form, "damaged") || "0", lost: value(form, "lost") || "0", notes: value(form, "notes") }, admin.id); }
+  catch (error) { redirect(`/inventory/issues?error=${encodeURIComponent(errorMessage(error))}`); }
+  revalidatePath("/inventory/issues"); redirect("/inventory/issues?success=Issue+closed");
+}
+
+export async function updateSettingsAction(form: FormData) {
+  const admin = await requireAdmin(); const data = settingsInput.parse({ businessName: value(form, "businessName"), phone: value(form, "phone"), email: value(form, "email"), address: value(form, "address"), currencyCode: value(form, "currencyCode"), receiptFooter: value(form, "receiptFooter"), logoUrl: value(form, "logoUrl") });
+  const old = await prisma.businessSetting.findUnique({ where: { id: "singleton" } });
+  const settings = await prisma.businessSetting.upsert({ where: { id: "singleton" }, update: { ...data, logoUrl: data.logoUrl || null }, create: { id: "singleton", ...data, logoUrl: data.logoUrl || null } });
+  await prisma.auditLog.create({ data: { userId: admin.id, action: "SETTINGS_UPDATED", entityType: "BusinessSetting", entityId: settings.id, oldValues: old ? { businessName: old.businessName } : undefined, newValues: { businessName: settings.businessName } } });
+  revalidatePath("/settings"); redirect("/settings?success=Settings+updated");
+}
