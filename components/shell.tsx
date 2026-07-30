@@ -18,11 +18,32 @@ export function Shell({ user, children }: { user: { fullName: string; username?:
   const homeHref = user.role === "ADMIN" ? "/dashboard" : "/pos";
   return <div className="app-shell">
     <aside className="sidebar">
-      <Link className="brand" href={homeHref}><span className="brand-mark"><Droplets size={23} /></span><span><strong>SwiftWash</strong><small>Operations POS</small></span></Link>
-      <nav className="nav">{links.map(([label, href, Icon]) => <Link className="nav-link" href={href} key={href}><Icon size={18} />{label}</Link>)}</nav>
-      <div className="sidebar-user"><strong>{user.fullName}</strong><small>{user.role.toLowerCase()}</small><LogoutButton /></div>
+      <Link className="brand" href={homeHref}>
+        <span className="brand-mark">
+          <Droplets size={23} />
+        </span>
+        <span>
+          <strong>SwiftWash</strong>
+          <small>Operations POS</small>
+        </span>
+      </Link>
+      <nav className="nav">{links.map(([label, href, Icon]) => <Link className="nav-link" href={href} key={href}>
+        <Icon size={18} />
+        {label}
+      </Link>)}
+      </nav>
+      <div className="sidebar-user">
+        <strong>{user.fullName}</strong>
+        <small>{user.role.toLowerCase()}</small>
+        <LogoutButton />
+      </div>
     </aside>
-    <main className="main"><header className="topbar"><div><p>Car wash operations</p><strong>Single-store control centre</strong></div><SessionExpiry expiresAt={user.sessionExpiresAt} /></header>{children}</main>
+    <main className="main">
+      <header className="topbar">
+        <div><p>Car wash operations</p>
+        </div><SessionExpiry expiresAt={user.sessionExpiresAt} />
+      </header>{children}
+    </main>
     <MobileNavigation user={user} />
   </div>;
 }

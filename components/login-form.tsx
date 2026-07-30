@@ -40,7 +40,7 @@ export function LoginForm() {
       </div>
 
     </div>
-    <button className="btn btn-primary btn-block" style={{ minHeight: 50, marginTop: 10 }} disabled={pending}>{pending ? "Signing in…" : "Sign in securely"}</button>
+    <button className="btn btn-primary btn-block" style={{ minHeight: 50, marginTop: 10 }} disabled={pending}>{pending ? "Signing in…" : "Sign in"}</button>
 
   </form>;
 }
