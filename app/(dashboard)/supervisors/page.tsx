@@ -9,6 +9,81 @@ import { requireAdmin } from "@/lib/session";
 export const metadata = { title: "Supervisors" };
 export default async function SupervisorsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   await requireAdmin(); const query = await searchParams; const users = await getSupervisorAccounts();
-  return <div className="page"><div className="page-head"><div><span className="eyebrow">Access control</span><h1>Supervisors</h1><p>Create accounts, update sign-in details, and control POS access.</p></div></div><Flash success={query.success} error={query.error} /><div className="grid two-grid"><div className="card"><div className="card-head"><h2>Supervisor accounts</h2><span className="badge">{users.length}</span></div><div className="table-wrap supervisor-table-wrap"><table className="supervisor-table"><thead><tr><th>Name</th><th>Username</th><th>Receipts</th><th>Created</th><th>Account status</th><th>Manage</th></tr></thead><tbody>{users.map((user) => <tr key={user.id}><td data-label="Name"><strong>{user.fullName}</strong></td><td data-label="Username">@{user.displayUsername || user.username}</td><td data-label="Receipts">{user._count.receiptsCreated}</td><td data-label="Created">{formatDateTime(user.createdAt)}</td><td data-label="Status"><div className="actions supervisor-status"><span className={`badge ${user.isActive ? "success" : "danger"}`}>{user.isActive ? "Active" : "Disabled"}</span><form action={toggleSupervisorAction}><input type="hidden" name="id" value={user.id} /><input type="hidden" name="isActive" value={String(!user.isActive)} /><button className={`btn ${user.isActive ? "btn-danger" : "btn-soft"}`}>{user.isActive ? "Disable" : "Enable"}</button></form></div></td><td data-label="Manage"><SupervisorAccountManager user={user} /></td></tr>)}</tbody></table></div></div>
-    <form action={createSupervisorAction} className="card card-pad"><span className="stat-icon" style={{ marginBottom: 16 }}><UserRoundCheck size={19} /></span><h2>Create supervisor</h2><p className="muted">Passwords are salted and hashed with scrypt. Plain-text passwords are never stored.</p><div className="field"><label>Full name</label><input className="input" name="fullName" required /></div><div className="field" style={{ marginTop: 12 }}><label>Username</label><input className="input" name="username" minLength={3} autoCapitalize="none" spellCheck={false} autoComplete="off" required /></div><div className="field" style={{ marginTop: 12 }}><label>Temporary password</label><input className="input" type="password" name="password" minLength={12} autoComplete="new-password" required /></div><div className="password-requirements"><span>Use 12+ characters with uppercase, lowercase, a number, and a symbol.</span></div><button className="btn btn-primary btn-block" style={{ marginTop: 16 }}><Plus size={16} /> Create account</button></form></div></div>;
+  return <div className="page">
+    <div className="page-head">
+      <div>
+        <span className="eyebrow">Access control</span>
+        <h1>Supervisors</h1>
+        <p>Create accounts, update sign-in details, and control POS access.</p>
+      </div>
+    </div>
+    <Flash success={query.success} error={query.error} />
+    <div className="grid two-grid">
+      <div className="card">
+        <div className="card-head">
+          <h2>Supervisor accounts</h2>
+          <span className="badge">{users.length}</span>
+        </div>
+        <div className="table-wrap supervisor-table-wrap">
+          <table className="supervisor-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Username</th>
+
+                <th>Created</th>
+                <th>Account status</th>
+                <th>Manage</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((user) => <tr key={user.id}>
+                <td data-label="Name">
+                  <strong>{user.fullName}</strong>
+                </td>
+                <td data-label="Username">@{user.displayUsername || user.username}</td>
+                {/* <td data-label="Receipts">{user._count.receiptsCreated}</td> */}
+                <td data-label="Created">{formatDateTime(user.createdAt)}</td>
+                <td data-label="Status">
+                  <div className="actions supervisor-status">
+                    <span className={`badge ${user.isActive ? "success" : "danger"}`}>
+                      {user.isActive ? "Active" : "Disabled"}
+                    </span><form action={toggleSupervisorAction}>
+                      <input type="hidden" name="id" value={user.id} />
+                      <input type="hidden" name="isActive" value={String(!user.isActive)} />
+                      <button className={`btn ${user.isActive ? "btn-danger" : "btn-soft"}`}>
+                        {user.isActive ? "Disable" : "Enable"}</button>
+                    </form>
+                  </div>
+                </td>
+                <td data-label="Manage">
+                  <SupervisorAccountManager user={user} />
+                </td>
+              </tr>)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <form action={createSupervisorAction} className="card card-pad">
+        <span className="stat-icon" style={{ marginBottom: 16 }}><UserRoundCheck size={19} />
+        </span>
+        <h2>Create supervisor</h2>
+        <p className="muted">Passwords are salted and hashed with scrypt. Plain-text passwords are never stored.</p>
+        <div className="field"><label>Full name</label>
+          <input className="input" name="fullName" maxLength={120} autoComplete="name" required />
+        </div><div className="field" style={{ marginTop: 12 }}>
+          <label>Username</label>
+          <input className="input" name="username" minLength={3} maxLength={30} pattern="[A-Za-z0-9_.]+" title="Use only letters, numbers, dots, and underscores" autoCapitalize="none" spellCheck={false} autoComplete="off" required />
+        </div>
+        <div className="field" style={{ marginTop: 12 }}>
+          <label>password</label>
+          <input className="input" type="password" name="password" minLength={12} maxLength={128} pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{12,128}" title="Use 12+ characters with uppercase, lowercase, a number, and a symbol" autoComplete="new-password" required />
+        </div>
+        <div className="password-requirements">
+          <span>Use 12+ characters with uppercase, lowercase, a number, and a symbol.</span>
+        </div>
+        <button className="btn btn-primary btn-block" style={{ marginTop: 16 }}><Plus size={16} /> Create account</button>
+      </form>
+    </div>
+  </div>;
 }

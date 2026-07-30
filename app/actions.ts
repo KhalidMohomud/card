@@ -81,15 +81,28 @@ export async function togglePaymentMethodAction(form: FormData) {
 
 export async function createSupervisorAction(form: FormData) {
   const admin = await requireAdmin();
+  const parsed = supervisorInput.safeParse({ fullName: value(form, "fullName"), username: value(form, "username"), password: value(form, "password") });
+  if (!parsed.success) {
+    const field = parsed.error.issues[0]?.path[0];
+    const message = field === "fullName"
+      ? "Enter the supervisor's full name."
+      : field === "username"
+        ? "Username must be 3–30 letters, numbers, dots, or underscores."
+        : "Password must have 12+ characters, uppercase, lowercase, a number, and a symbol.";
+    redirect(`/supervisors?error=${encodeURIComponent(message)}`);
+  }
+  const data = parsed.data;
+  const username = data.username.toLowerCase();
+  const existing = await prisma.user.findUnique({ where: { username }, select: { id: true } });
+  if (existing) redirect(`/supervisors?error=${encodeURIComponent(`Username @${username} already exists. Choose a different username.`)}`);
   try {
-    const data = supervisorInput.parse({ fullName: value(form, "fullName"), username: value(form, "username"), password: value(form, "password") });
-    const username = data.username.toLowerCase(); const password = await hashPassword(data.password);
+    const password = await hashPassword(data.password);
     await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({ data: { name: data.fullName, fullName: data.fullName, email: `${username}@users.swiftwash.invalid`, username, displayUsername: data.username, role: "SUPERVISOR" } });
       await tx.account.create({ data: { providerId: "credential", accountId: user.id, userId: user.id, password } });
       await tx.auditLog.create({ data: { userId: admin.id, action: "USER_CREATED", entityType: "User", entityId: user.id, newValues: { role: "SUPERVISOR", username } } });
     });
-  } catch { redirect("/supervisors?error=Username+may+already+exist+or+the+form+is+invalid"); }
+  } catch { redirect("/supervisors?error=The+supervisor+account+could+not+be+created.+Please+try+again"); }
   updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.supervisors); redirect("/supervisors?success=Supervisor+created");
 }
 
