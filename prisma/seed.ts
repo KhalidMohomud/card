@@ -1,18 +1,17 @@
 import "dotenv/config";
 import { PrismaClient, UserRole } from "@prisma/client";
-import { hashPassword } from "better-auth/crypto";
 import { z } from "zod";
+import { isPasswordHash } from "../lib/password";
 
 const prisma = new PrismaClient();
 const env = z.object({
   ADMIN_NAME: z.string().min(2),
   ADMIN_USERNAME: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_.]+$/),
-  ADMIN_PASSWORD: z.string().min(10).max(128),
+  ADMIN_PASSWORD_HASH: z.string().refine(isPasswordHash, "Run npm run auth:hash-password and use the generated scrypt hash"),
 }).parse(process.env);
 
 async function main() {
   const username = env.ADMIN_USERNAME.toLowerCase();
-  const password = await hashPassword(env.ADMIN_PASSWORD);
   const admin = await prisma.user.upsert({
     where: { username },
     update: { name: env.ADMIN_NAME, fullName: env.ADMIN_NAME, displayUsername: env.ADMIN_USERNAME, role: UserRole.ADMIN, isActive: true },
@@ -20,16 +19,19 @@ async function main() {
   });
   const credential = await prisma.account.findFirst({
     where: { providerId: "credential", userId: admin.id },
-    select: { id: true },
+    select: { id: true, password: true },
   });
   if (credential) {
     await prisma.account.update({
       where: { id: credential.id },
-      data: { accountId: admin.id, password },
+      data: {
+        accountId: admin.id,
+        ...(!credential.password || !isPasswordHash(credential.password) ? { password: env.ADMIN_PASSWORD_HASH } : {}),
+      },
     });
   } else {
     await prisma.account.create({
-      data: { providerId: "credential", accountId: admin.id, userId: admin.id, password },
+      data: { providerId: "credential", accountId: admin.id, userId: admin.id, password: env.ADMIN_PASSWORD_HASH },
     });
   }
 

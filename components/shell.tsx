@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { BarChart3, Boxes, Droplets, FileClock, HandCoins, LayoutDashboard, PackagePlus, ReceiptText, Settings, ShieldCheck, ShoppingCart, UsersRound } from "lucide-react";
+import { BarChart3, Boxes, Droplets, FileClock, HandCoins, LayoutDashboard, PackagePlus, ReceiptText, Settings, ShoppingCart, UsersRound } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { LogoutButton } from "@/components/logout-button";
 import { MobileNavigation } from "@/components/mobile-navigation";
+import { SessionExpiry } from "@/components/session-expiry";
 
 const adminLinks = [
   ["Dashboard", "/dashboard", LayoutDashboard], ["POS", "/pos", ShoppingCart], ["Receipts", "/receipts", ReceiptText],
@@ -12,7 +13,7 @@ const adminLinks = [
 ] as const;
 const supervisorLinks = [["Open POS", "/pos", ShoppingCart]] as const;
 
-export function Shell({ user, children }: { user: { fullName: string; username?: string | null; role: UserRole }; children: React.ReactNode }) {
+export function Shell({ user, children }: { user: { fullName: string; username?: string | null; role: UserRole; sessionExpiresAt: string }; children: React.ReactNode }) {
   const links = user.role === "ADMIN" ? adminLinks : supervisorLinks;
   const homeHref = user.role === "ADMIN" ? "/dashboard" : "/pos";
   return <div className="app-shell">
@@ -21,7 +22,7 @@ export function Shell({ user, children }: { user: { fullName: string; username?:
       <nav className="nav">{links.map(([label, href, Icon]) => <Link className="nav-link" href={href} key={href}><Icon size={18} />{label}</Link>)}</nav>
       <div className="sidebar-user"><strong>{user.fullName}</strong><small>{user.role.toLowerCase()}</small><LogoutButton /></div>
     </aside>
-    <main className="main"><header className="topbar"><div><p>Car wash operations</p><strong>Single-store control centre</strong></div><span className="badge success"><ShieldCheck size={12} /> Secure</span></header>{children}</main>
+    <main className="main"><header className="topbar"><div><p>Car wash operations</p><strong>Single-store control centre</strong></div><SessionExpiry expiresAt={user.sessionExpiresAt} /></header>{children}</main>
     <MobileNavigation user={user} />
   </div>;
 }

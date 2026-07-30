@@ -1,39 +1,31 @@
 import "server-only";
+
 import { cache } from "react";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { UserRole } from "@prisma/client";
-import { auth } from "@/lib/auth";
+import { readDatabaseSession } from "@/lib/auth-session";
 
-type SessionUser = {
+export type AuthenticatedUser = {
   id: string;
-  fullName?: string;
-  username?: string | null;
-  role?: UserRole;
-  isActive?: boolean;
+  fullName: string;
+  username: string | null;
+  role: UserRole;
+  isActive: true;
+  sessionExpiresAt: string;
 };
 
-function normalizeUser(user: SessionUser | undefined) {
-  if (!user?.isActive || !user.fullName || (user.role !== "ADMIN" && user.role !== "SUPERVISOR")) return null;
-  return { id: user.id, fullName: user.fullName, username: user.username ?? null, role: user.role, isActive: true as const };
+async function readCurrentUser(): Promise<AuthenticatedUser | null> {
+  const session = await readDatabaseSession();
+  if (!session) return null;
+  return { id: session.user.id, fullName: session.user.fullName, username: session.user.username, role: session.user.role, isActive: true, sessionExpiresAt: session.expiresAt.toISOString() };
 }
 
-export const getCurrentUser = cache(async () => {
-  const session = await auth.api.getSession({ headers: await headers() });
-  return normalizeUser(session?.user as SessionUser | undefined);
-});
-
-export async function getFreshCurrentUser() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-    query: { disableCookieCache: true },
-  });
-  return normalizeUser(session?.user as SessionUser | undefined);
-}
+export const getCurrentUser = cache(readCurrentUser);
+export async function getFreshCurrentUser() { return readCurrentUser(); }
 
 export async function requireUser() {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/login?expired=1");
   return user;
 }
 
@@ -43,6 +35,4 @@ export async function requireRole(role: UserRole) {
   return user;
 }
 
-export async function requireAdmin() {
-  return requireRole("ADMIN");
-}
+export async function requireAdmin() { return requireRole("ADMIN"); }

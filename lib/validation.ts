@@ -5,6 +5,7 @@ const optionalText = z.string().trim().max(500).optional().transform((v) => v ||
 const money = z.string().regex(/^\d+(\.\d{1,2})?$/, "Use a valid amount with up to 2 decimals");
 const quantity = z.string().regex(/^\d+(\.\d{1,3})?$/, "Use a positive quantity with up to 3 decimals").refine((value) => Number(value) > 0, "Quantity must be greater than zero");
 const nonnegativeQuantity = z.string().regex(/^\d+(\.\d{1,3})?$/, "Use a quantity with up to 3 decimals");
+const strongPassword = z.string().min(12).max(128).regex(/[a-z]/, "Add a lowercase letter").regex(/[A-Z]/, "Add an uppercase letter").regex(/\d/, "Add a number").regex(/[^a-zA-Z0-9]/, "Add a symbol");
 
 export const receiptInput = z.object({
   serviceId: z.string().cuid(),
@@ -19,14 +20,15 @@ export const paymentMethodInput = z.object({ name: requiredText });
 export const supervisorInput = z.object({
   fullName: requiredText,
   username: z.string().trim().min(3).max(30).regex(/^[a-zA-Z0-9_.]+$/),
-  password: z.string().min(10).max(128),
+  password: strongPassword,
 });
 export const supervisorUpdateInput = z.object({
   id: z.string().cuid(),
   fullName: requiredText,
   username: z.string().trim().min(3).max(30).regex(/^[a-zA-Z0-9_.]+$/),
-  password: z.string().max(128).refine((password) => password.length === 0 || password.length >= 10, "Password must have at least 10 characters").transform((password) => password || undefined),
+  password: z.union([z.literal(""), strongPassword]).transform((password) => password || undefined),
 });
+export const passwordChangeInput = z.object({ currentPassword: z.string().min(1).max(128), newPassword: strongPassword, confirmPassword: z.string() }).refine((data) => data.newPassword === data.confirmPassword, { path: ["confirmPassword"], message: "Passwords do not match" }).refine((data) => data.currentPassword !== data.newPassword, { path: ["newPassword"], message: "Choose a different password" });
 export const cancellationInput = z.object({ id: z.coerce.number().int().positive(), reason: z.string().trim().min(5).max(500) });
 export const expenseInput = z.object({
   type: z.enum(["GENERAL", "WORKER_COMMISSION", "SUPERVISOR_SALARY"]),

@@ -6,7 +6,8 @@ import { getDashboardSnapshot, getReferenceData } from "@/lib/cached-data";
 import { getCurrentUser } from "@/lib/session";
 
 export const metadata = { title: "Sign in" };
-export default async function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+  const query = await searchParams;
   const user = await getCurrentUser();
   if (user) redirect(user.role === "SUPERVISOR" ? "/pos" : "/dashboard");
   // Warm shared POS/admin data after the sign-in screen is sent. In normal use
@@ -32,6 +33,6 @@ export default async function LoginPage() {
     <section className="login-panel">
       <div className="login-card">
         <span className="stat-icon" style={{ marginBottom: 24 }}>
-          <ShieldCheck size={20} /></span><h2>Welcome back</h2><p>Sign in with your staff username to continue.</p><LoginForm /></div></section>
+          <ShieldCheck size={20} /></span><h2>Welcome back</h2><p>Sign in with your staff username to continue.</p>{query.expired && <div className="alert alert-error">Your five-minute session expired. Please sign in again.</div>}{query.passwordChanged && <div className="alert alert-success">Password changed successfully. Sign in with your new password.</div>}<LoginForm /></div></section>
   </main>;
 }

@@ -109,6 +109,15 @@ textarea.input { min-height: 82px; resize: vertical; }
 .login-card > p { color: var(--muted); margin: 0 0 30px; }
 .login-card .field { margin: 16px 0; }
 .login-card .input { min-height: 50px; }
+.login-session-note { margin: 14px 0 0 !important; color: var(--muted); text-align: center; font-size: 11px; line-height: 1.5; }
+.password-visibility { position: absolute; top: 50%; right: 9px; transform: translateY(-50%); width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 9px; color: var(--muted); background: transparent; cursor: pointer; }
+.password-visibility:hover { color: var(--brand); background: var(--mint); }
+.login-password-help { display: block; margin-top: 6px; color: var(--muted); font-size: 10px; line-height: 1.4; }
+.session-expiry { font-variant-numeric: tabular-nums; }
+.settings-grid { grid-template-columns: minmax(0, 1.45fr) minmax(320px, .75fr); align-items: start; }
+.security-settings-card { position: sticky; top: 94px; }
+.password-requirements { display: flex; align-items: center; gap: 9px; margin: 16px 0; padding: 12px; border-radius: 11px; background: var(--mint); color: var(--brand-dark); font-size: 11px; line-height: 1.45; }
+.password-requirements svg { flex: 0 0 auto; }
 .pos-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 22px; }
 .service-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
 .service-card { border: 2px solid var(--line); background: white; border-radius: 15px; padding: 22px; min-height: 135px; cursor: pointer; text-align: left; color: var(--ink); }
@@ -198,7 +207,7 @@ textarea.input { min-height: 82px; resize: vertical; }
 .print-actions { display: flex; justify-content: center; gap: 10px; margin: 22px; }
 
 @media (max-width: 1450px) { .two-grid { grid-template-columns: 1fr; } }
-@media (max-width: 1050px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .pos-layout { grid-template-columns: 1fr; } .checkout { position: static; } }
+@media (max-width: 1050px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .pos-layout, .settings-grid { grid-template-columns: 1fr; } .checkout, .security-settings-card { position: static; } }
 @media (max-width: 760px) {
   .app-shell { display: block; padding-bottom: calc(82px + env(safe-area-inset-bottom)); } .sidebar { display: none; } .topbar { height: 62px; padding: 0 18px; }
   .page { padding: 24px 16px 40px; } .page-head { align-items: flex-start; flex-direction: column; } .stats-grid, .three-grid { grid-template-columns: 1fr 1fr; }

@@ -142,6 +142,17 @@ model Verification {
   @@map("verification")
 }
 
+model LoginThrottle {
+  key             String    @id
+  attempts        Int       @default(0)
+  windowStartedAt DateTime
+  blockedUntil    DateTime?
+  expiresAt       DateTime
+  updatedAt       DateTime  @updatedAt
+
+  @@index([expiresAt])
+}
+
 model BusinessSetting {
   id            String   @id @default("singleton")
   businessName  String

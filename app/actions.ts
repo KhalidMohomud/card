@@ -1,13 +1,15 @@
 "use server";
 
-import { hashPassword } from "better-auth/crypto";
 import { Prisma } from "@prisma/client";
+import { cookies } from "next/headers";
 import { refresh, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { CACHE_TAGS } from "@/lib/cached-data";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, requireUser } from "@/lib/session";
-import { cancellationInput, inventoryItemInput, paymentMethodInput, serviceInput, serviceUpdateInput, settingsInput, supervisorInput, supervisorUpdateInput, supplierInput } from "@/lib/validation";
+import { cancellationInput, inventoryItemInput, passwordChangeInput, paymentMethodInput, serviceInput, serviceUpdateInput, settingsInput, supervisorInput, supervisorUpdateInput, supplierInput } from "@/lib/validation";
+import { SESSION_COOKIE_NAME } from "@/lib/auth-session";
+import { hashPassword, verifyPassword } from "@/lib/password";
 import { cancelReceipt, recordReprint } from "@/modules/receipts/service";
 import { cancelExpense, createExpense, deleteExpense, updateExpense } from "@/modules/expenses/service";
 import { adjustStock, closeInventoryIssue, issueInventory } from "@/modules/inventory/service";
@@ -253,4 +255,20 @@ export async function updateSettingsAction(form: FormData) {
   const settings = await prisma.businessSetting.upsert({ where: { id: "singleton" }, update: { ...data, logoUrl: data.logoUrl || null }, create: { id: "singleton", ...data, logoUrl: data.logoUrl || null } });
   await prisma.auditLog.create({ data: { userId: admin.id, action: "SETTINGS_UPDATED", entityType: "BusinessSetting", entityId: settings.id, oldValues: old ? { businessName: old.businessName } : undefined, newValues: { businessName: settings.businessName } } });
   updateTag(CACHE_TAGS.catalog); redirect("/settings?success=Settings+updated");
+}
+
+export async function changeOwnPasswordAction(form: FormData) {
+  const user = await requireUser();
+  const parsed = passwordChangeInput.safeParse({ currentPassword: value(form, "currentPassword"), newPassword: value(form, "newPassword"), confirmPassword: value(form, "confirmPassword") });
+  if (!parsed.success) redirect("/settings?error=Use+at+least+12+characters+with+uppercase,+lowercase,+number,+and+symbol");
+  const account = await prisma.account.findFirst({ where: { userId: user.id, providerId: "credential" }, select: { id: true, password: true } });
+  if (!account?.password || !(await verifyPassword(account.password, parsed.data.currentPassword))) redirect("/settings?error=Current+password+is+incorrect");
+  const password = await hashPassword(parsed.data.newPassword);
+  await prisma.$transaction(async (tx) => {
+    await tx.account.update({ where: { id: account.id }, data: { password } });
+    await tx.session.deleteMany({ where: { userId: user.id } });
+    await tx.auditLog.create({ data: { userId: user.id, action: "PASSWORD_CHANGED", entityType: "User", entityId: user.id } });
+  });
+  const cookieStore = await cookies(); cookieStore.delete(SESSION_COOKIE_NAME);
+  updateTag(CACHE_TAGS.audit); redirect("/login?passwordChanged=1");
 }
