@@ -8,8 +8,9 @@ export function commissionAmount(carCount: number, ratePerCar: string) {
   return calculateCommission(carCount, ratePerCar);
 }
 
-export async function createExpense(input: unknown, adminId: string) {
-  const data = expenseInput.parse(input);
+type ExpenseData = ReturnType<typeof expenseInput.parse>;
+
+async function prepareExpense(data: ExpenseData) {
   let amount: Prisma.Decimal;
   let receiptCount: number | undefined;
   if (data.type === "WORKER_COMMISSION") {
@@ -26,19 +27,70 @@ export async function createExpense(input: unknown, adminId: string) {
   if (data.type === "GENERAL" && !data.categoryId) throw new Error("CATEGORY_REQUIRED");
   if (data.type === "SUPERVISOR_SALARY" && !data.supervisorUserId) throw new Error("SUPERVISOR_REQUIRED");
 
+  return {
+    amount,
+    receiptCount,
+    values: {
+      type: data.type,
+      categoryId: data.type === "GENERAL" ? data.categoryId : null,
+      supervisorUserId: data.type === "GENERAL" ? null : data.supervisorUserId,
+      paymentMethodId: data.paymentMethodId ?? null,
+      title: data.title,
+      expenseDate: data.expenseDate,
+      periodStart: data.type === "SUPERVISOR_SALARY" ? data.periodStart ?? null : null,
+      periodEnd: data.type === "SUPERVISOR_SALARY" ? data.periodEnd ?? null : null,
+      carCount: data.type === "WORKER_COMMISSION" ? data.carCount : null,
+      ratePerCar: data.type === "WORKER_COMMISSION" && data.ratePerCar ? new Prisma.Decimal(data.ratePerCar) : null,
+      amount,
+      paymentStatus: data.paymentStatus,
+      paymentReference: data.paymentReference ?? null,
+      notes: data.notes ?? null,
+      commissionOverrideReason: data.type === "WORKER_COMMISSION" ? data.overrideReason ?? null : null,
+    },
+  };
+}
+
+function expenseSnapshot(expense: { type: string; title: string; amount: Prisma.Decimal; expenseDate: Date; status: string }) {
+  return { type: expense.type, title: expense.title, amount: expense.amount.toFixed(2), expenseDate: expense.expenseDate.toISOString(), status: expense.status };
+}
+
+export async function createExpense(input: unknown, adminId: string) {
+  const data = expenseInput.parse(input);
+  const { amount, receiptCount, values } = await prepareExpense(data);
+
   return prisma.$transaction(async (tx) => {
     const expense = await tx.expense.create({
       data: {
-        type: data.type, categoryId: data.categoryId, supervisorUserId: data.supervisorUserId,
-        paymentMethodId: data.paymentMethodId, title: data.title, expenseDate: data.expenseDate,
-        periodStart: data.periodStart, periodEnd: data.periodEnd, carCount: data.carCount,
-        ratePerCar: data.ratePerCar ? new Prisma.Decimal(data.ratePerCar) : undefined, amount,
-        paymentStatus: data.paymentStatus, paymentReference: data.paymentReference, notes: data.notes,
-        commissionOverrideReason: data.overrideReason, createdByUserId: adminId,
+        ...values,
+        createdByUserId: adminId,
       },
     });
     await tx.auditLog.create({ data: { userId: adminId, action: "EXPENSE_CREATED", entityType: "Expense", entityId: expense.id, newValues: { type: expense.type, amount: amount.toFixed(2), receiptCount } } });
     return expense;
+  });
+}
+
+export async function updateExpense(id: string, input: unknown, adminId: string) {
+  const data = expenseInput.parse(input);
+  const { receiptCount, values } = await prepareExpense(data);
+  return prisma.$transaction(async (tx) => {
+    const current = await tx.expense.findUnique({ where: { id } });
+    if (!current) throw new Error("EXPENSE_NOT_FOUND");
+    if (current.status !== "ACTIVE") throw new Error("EXPENSE_NOT_EDITABLE");
+    const changed = await tx.expense.updateMany({ where: { id, status: "ACTIVE" }, data: values });
+    if (changed.count !== 1) throw new Error("EXPENSE_NOT_EDITABLE");
+    const expense = await tx.expense.findUniqueOrThrow({ where: { id } });
+    await tx.auditLog.create({ data: { userId: adminId, action: "EXPENSE_UPDATED", entityType: "Expense", entityId: id, oldValues: expenseSnapshot(current), newValues: { ...expenseSnapshot(expense), receiptCount } } });
+    return expense;
+  });
+}
+
+export async function deleteExpense(id: string, adminId: string) {
+  return prisma.$transaction(async (tx) => {
+    const current = await tx.expense.findUnique({ where: { id } });
+    if (!current) throw new Error("EXPENSE_NOT_FOUND");
+    await tx.auditLog.create({ data: { userId: adminId, action: "EXPENSE_DELETED", entityType: "Expense", entityId: id, oldValues: expenseSnapshot(current) } });
+    await tx.expense.delete({ where: { id } });
   });
 }
 

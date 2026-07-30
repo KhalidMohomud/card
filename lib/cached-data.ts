@@ -52,11 +52,22 @@ export const getSupervisorAccounts = unstable_cache(async () => {
   return users.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }));
 }, ["swiftwash-supervisor-accounts-v1"], { tags: [CACHE_TAGS.supervisors, CACHE_TAGS.reference], revalidate: 5 * 60 });
 
-const getReceiptLedgerForQuery = unstable_cache(async (statusValue: string, fromValue: string, toValue: string, page: number) => {
+const getReceiptLedgerForQuery = unstable_cache(async (statusValue: string, fromValue: string, toValue: string, searchValue: string, page: number) => {
   const status = statusValue === "COMPLETED" || statusValue === "CANCELLED" ? statusValue : undefined;
+  const search = searchValue.trim().slice(0, 120);
+  const normalizedReceiptNumber = search.replace(/^#/, "").replace(/^0+/, "") || "0";
+  const receiptId = /^\d+$/.test(normalizedReceiptNumber) ? Number(normalizedReceiptNumber) : undefined;
+  const matchingStatuses = (["COMPLETED", "CANCELLED"] as const).filter((value) => value.toLowerCase().includes(search.toLowerCase()));
   const where: Prisma.ReceiptWhereInput = {
     ...(status ? { status } : {}),
     ...(fromValue || toValue ? { issuedAt: { gte: fromValue ? new Date(`${fromValue}T00:00:00`) : undefined, lte: toValue ? new Date(`${toValue}T23:59:59.999`) : undefined } } : {}),
+    ...(search ? { OR: [
+      ...(receiptId && Number.isSafeInteger(receiptId) ? [{ id: receiptId }] : []),
+      { serviceNameSnapshot: { contains: search, mode: "insensitive" as const } },
+      { createdByUser: { is: { OR: [{ fullName: { contains: search, mode: "insensitive" as const } }, { username: { contains: search, mode: "insensitive" as const } }] } } },
+      { paymentMethod: { is: { name: { contains: search, mode: "insensitive" as const } } } },
+      ...matchingStatuses.map((matchingStatus) => ({ status: matchingStatus })),
+    ] } : {}),
   };
   const take = 25;
   const [rows, total] = await Promise.all([
@@ -73,10 +84,10 @@ const getReceiptLedgerForQuery = unstable_cache(async (statusValue: string, from
     total,
     rows: rows.map((row) => ({ id: row.id, issuedAt: row.issuedAt.toISOString(), service: row.serviceNameSnapshot, total: row.servicePriceSnapshot.toFixed(2), status: row.status, payment: row.paymentMethod.name, supervisor: row.createdByUser.fullName })),
   };
-}, ["swiftwash-receipt-ledger-v1"], { tags: [CACHE_TAGS.receipts, CACHE_TAGS.catalog], revalidate: 5 * 60 });
+}, ["swiftwash-receipt-ledger-v2"], { tags: [CACHE_TAGS.receipts, CACHE_TAGS.catalog], revalidate: 5 * 60 });
 
-export function getReceiptLedger(status: string | undefined, from: string | undefined, to: string | undefined, page: number) {
-  return getReceiptLedgerForQuery(status ?? "", from ?? "", to ?? "", page);
+export function getReceiptLedger(status: string | undefined, from: string | undefined, to: string | undefined, search: string | undefined, page: number) {
+  return getReceiptLedgerForQuery(status ?? "", from ?? "", to ?? "", search ?? "", page);
 }
 
 const getExpenseLedgerForPage = unstable_cache(async (page: number) => {
@@ -86,36 +97,66 @@ const getExpenseLedgerForPage = unstable_cache(async (page: number) => {
       orderBy: [{ expenseDate: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * take,
       take,
-      select: { id: true, expenseDate: true, type: true, title: true, amount: true, paymentStatus: true, status: true, carCount: true, ratePerCar: true, category: { select: { name: true } }, supervisor: { select: { fullName: true } } },
+      select: {
+        id: true, expenseDate: true, type: true, title: true, amount: true, paymentStatus: true, status: true,
+        categoryId: true, supervisorUserId: true, paymentMethodId: true, carCount: true, ratePerCar: true,
+        periodStart: true, periodEnd: true, paymentReference: true, notes: true, commissionOverrideReason: true,
+        category: { select: { id: true, name: true } }, supervisor: { select: { id: true, fullName: true } },
+      },
     }),
     prisma.expense.count(),
   ]);
   return {
     total,
-    rows: rows.map((row) => ({ id: row.id, expenseDate: row.expenseDate.toISOString(), type: row.type, title: row.title, amount: row.amount.toFixed(2), paymentStatus: row.paymentStatus, status: row.status, carCount: row.carCount, ratePerCar: row.ratePerCar?.toFixed(2) ?? null, supervisor: row.supervisor, category: row.category })),
+    rows: rows.map((row) => ({
+      ...row,
+      expenseDate: row.expenseDate.toISOString(), amount: row.amount.toFixed(2), ratePerCar: row.ratePerCar?.toFixed(2) ?? null,
+      periodStart: row.periodStart?.toISOString() ?? null, periodEnd: row.periodEnd?.toISOString() ?? null,
+    })),
   };
-}, ["swiftwash-expense-ledger-v1"], { tags: [CACHE_TAGS.expenses], revalidate: 5 * 60 });
+}, ["swiftwash-expense-ledger-v2"], { tags: [CACHE_TAGS.expenses], revalidate: 5 * 60 });
 
 export function getExpenseLedger(page: number) {
   return getExpenseLedgerForPage(page);
 }
 
-export const getPurchaseLedger = unstable_cache(async () => {
+const getPurchaseLedgerForQuery = unstable_cache(async (searchValue: string) => {
+  const search = searchValue.trim().slice(0, 120);
+  const matchingStatuses = (["DRAFT", "RECEIVED", "CANCELLED"] as const).filter((value) => value.toLowerCase().includes(search.toLowerCase()));
+  const matchingPaymentStatuses = (["PAID", "UNPAID"] as const).filter((value) => value.toLowerCase().includes(search.toLowerCase()));
+  const where: Prisma.PurchaseWhereInput = search ? { OR: [
+    { supplier: { is: { name: { contains: search, mode: "insensitive" } } } },
+    { supplierInvoiceNumber: { contains: search, mode: "insensitive" } },
+    { notes: { contains: search, mode: "insensitive" } },
+    { paymentMethod: { is: { name: { contains: search, mode: "insensitive" } } } },
+    { items: { some: { inventoryItem: { is: { OR: [{ name: { contains: search, mode: "insensitive" } }, { sku: { contains: search, mode: "insensitive" } }] } } } } },
+    ...matchingStatuses.map((status) => ({ status })),
+    ...matchingPaymentStatuses.map((paymentStatus) => ({ paymentStatus })),
+  ] } : {};
   const rows = await prisma.purchase.findMany({
+    where,
     orderBy: { purchaseDate: "desc" },
     take: 50,
-    select: { id: true, purchaseDate: true, supplierInvoiceNumber: true, status: true, supplier: { select: { name: true } }, items: { select: { id: true, quantity: true, unitCost: true, inventoryItem: { select: { name: true } } } } },
+    select: {
+      id: true, purchaseDate: true, supplierId: true, paymentMethodId: true, supplierInvoiceNumber: true,
+      paymentStatus: true, notes: true, status: true, supplier: { select: { id: true, name: true } },
+      items: { select: { id: true, inventoryItemId: true, quantity: true, unitCost: true, inventoryItem: { select: { id: true, name: true } } } },
+    },
   });
   return rows.map((row) => ({
-    id: row.id,
+    id: row.id, supplierId: row.supplierId, paymentMethodId: row.paymentMethodId, paymentStatus: row.paymentStatus, notes: row.notes,
     purchaseDate: row.purchaseDate.toISOString(),
     supplier: row.supplier,
     supplierInvoiceNumber: row.supplierInvoiceNumber,
     status: row.status,
-    items: row.items.map((item) => ({ id: item.id, inventoryItem: item.inventoryItem, quantity: item.quantity.toString() })),
+    items: row.items.map((item) => ({ id: item.id, inventoryItemId: item.inventoryItemId, inventoryItem: item.inventoryItem, quantity: item.quantity.toString(), unitCost: item.unitCost.toFixed(2) })),
     total: row.items.reduce((sum, item) => sum.add(item.quantity.mul(item.unitCost)), new Prisma.Decimal(0)).toFixed(2),
   }));
-}, ["swiftwash-purchase-ledger-v1"], { tags: [CACHE_TAGS.purchases], revalidate: 5 * 60 });
+}, ["swiftwash-purchase-ledger-v3"], { tags: [CACHE_TAGS.purchases], revalidate: 5 * 60 });
+
+export function getPurchaseLedger(search?: string) {
+  return getPurchaseLedgerForQuery(search ?? "");
+}
 
 export const getIssueLedger = unstable_cache(async () => {
   const rows = await prisma.inventoryIssue.findMany({

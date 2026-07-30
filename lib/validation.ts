@@ -14,11 +14,18 @@ export const receiptInput = z.object({
 });
 
 export const serviceInput = z.object({ name: requiredText, price: money, description: optionalText });
+export const serviceUpdateInput = serviceInput.extend({ id: z.string().cuid(), isActive: z.enum(["true", "false"]).transform((value) => value === "true") });
 export const paymentMethodInput = z.object({ name: requiredText });
 export const supervisorInput = z.object({
   fullName: requiredText,
   username: z.string().trim().min(3).max(30).regex(/^[a-zA-Z0-9_.]+$/),
   password: z.string().min(10).max(128),
+});
+export const supervisorUpdateInput = z.object({
+  id: z.string().cuid(),
+  fullName: requiredText,
+  username: z.string().trim().min(3).max(30).regex(/^[a-zA-Z0-9_.]+$/),
+  password: z.string().max(128).refine((password) => password.length === 0 || password.length >= 10, "Password must have at least 10 characters").transform((password) => password || undefined),
 });
 export const cancellationInput = z.object({ id: z.coerce.number().int().positive(), reason: z.string().trim().min(5).max(500) });
 export const expenseInput = z.object({

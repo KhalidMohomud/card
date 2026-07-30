@@ -28,7 +28,7 @@ export default async function ReceiptPrintPage({ params, searchParams }: { param
   const receipt = receiptRow ? { ...receiptRow, paymentMethod: { name: receiptRow.paymentMethodName }, createdByUser: { fullName: receiptRow.supervisorName } } : null;
   if (!receipt || (user.role === "SUPERVISOR" && receipt.createdByUserId !== user.id)) notFound();
   const business = catalog.settings ?? { businessName: "SwiftWash", phone: "", email: "", address: "", currencyCode: "USD", receiptFooter: "Thank You", logoUrl: null };
-  return <main style={{ minHeight: "100vh", background: "#edf1ef", padding: "1px 0" }}>
+  return <main className="receipt-screen">
     <div className="print-actions no-print"><Link className="btn btn-ghost" href={user.role === "SUPERVISOR" ? "/pos" : "/receipts"}><ArrowLeft size={17} /> {user.role === "SUPERVISOR" ? "Back to POS" : "Receipts"}</Link><PrintButton autoPrint={query.autoprint === "1"} /></div>
     <article className="receipt-paper">
       <h1>{business.businessName}</h1>{business.address && <div className="center">{business.address}</div>}{business.phone && <div className="center">{business.phone}</div>}

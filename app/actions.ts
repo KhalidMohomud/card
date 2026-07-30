@@ -7,11 +7,11 @@ import { redirect } from "next/navigation";
 import { CACHE_TAGS } from "@/lib/cached-data";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, requireUser } from "@/lib/session";
-import { cancellationInput, inventoryItemInput, paymentMethodInput, serviceInput, settingsInput, supervisorInput, supplierInput } from "@/lib/validation";
+import { cancellationInput, inventoryItemInput, paymentMethodInput, serviceInput, serviceUpdateInput, settingsInput, supervisorInput, supervisorUpdateInput, supplierInput } from "@/lib/validation";
 import { cancelReceipt, recordReprint } from "@/modules/receipts/service";
-import { createExpense, cancelExpense } from "@/modules/expenses/service";
+import { cancelExpense, createExpense, deleteExpense, updateExpense } from "@/modules/expenses/service";
 import { adjustStock, closeInventoryIssue, issueInventory } from "@/modules/inventory/service";
-import { createPurchase, receivePurchase } from "@/modules/purchases/service";
+import { createPurchase, deletePurchase, receivePurchase, updatePurchase } from "@/modules/purchases/service";
 
 function value(form: FormData, key: string) { return String(form.get(key) ?? ""); }
 function optionalDate(form: FormData, key: string) { const v = value(form, key); return v ? new Date(`${v}T00:00:00`) : undefined; }
@@ -19,11 +19,22 @@ function errorMessage(error: unknown) {
   if (!(error instanceof Error)) return "The request could not be completed.";
   if (error.message.startsWith("OVERRIDE_REQUIRED:")) return `Commission exceeds the ${error.message.split(":")[1]} completed receipts. Add an override reason to continue.`;
   const messages: Record<string, string> = {
-    INSUFFICIENT_STOCK: "Not enough available stock.", PURCHASE_NOT_RECEIVABLE: "This purchase has already been received or is not ready.",
+    INSUFFICIENT_STOCK: "Not enough available stock.", PURCHASE_NOT_RECEIVABLE: "This purchase has already been received or is not ready.", PURCHASE_ALREADY_RECEIVED: "This purchase was already received.",
+    EXPENSE_NOT_FOUND: "This expense no longer exists.", EXPENSE_NOT_EDITABLE: "Cancelled expenses cannot be edited.",
+    PURCHASE_NOT_FOUND: "This purchase no longer exists.", PURCHASE_NOT_EDITABLE: "Only draft purchases can be edited.",
+    PURCHASE_NOT_DELETABLE: "Only draft purchases can be deleted. Received purchases are locked because stock was already posted.",
     REUSABLE_ITEMS_MUST_BE_ACCOUNTED_FOR: "All reusable items must be returned, damaged, or lost before closing.",
     QUANTITY_EXCEEDS_ISSUED: "Returned, damaged, and lost quantities exceed the issued quantity.",
   };
   return messages[error.message] ?? "Check the form values and try again.";
+}
+
+function expenseFormData(form: FormData) {
+  return { type: value(form, "type"), title: value(form, "title"), expenseDate: new Date(`${value(form, "expenseDate")}T00:00:00`), categoryId: value(form, "categoryId"), supervisorUserId: value(form, "supervisorUserId"), paymentMethodId: value(form, "paymentMethodId"), paymentStatus: value(form, "paymentStatus"), amount: value(form, "amount") || undefined, carCount: value(form, "carCount") || undefined, ratePerCar: value(form, "ratePerCar") || undefined, periodStart: optionalDate(form, "periodStart"), periodEnd: optionalDate(form, "periodEnd"), paymentReference: value(form, "paymentReference"), notes: value(form, "notes"), overrideReason: value(form, "overrideReason") };
+}
+
+function purchaseFormData(form: FormData) {
+  return { supplierId: value(form, "supplierId"), paymentMethodId: value(form, "paymentMethodId"), supplierInvoiceNumber: value(form, "supplierInvoiceNumber"), purchaseDate: new Date(`${value(form, "purchaseDate")}T00:00:00`), paymentStatus: value(form, "paymentStatus"), inventoryItemId: value(form, "inventoryItemId"), quantity: value(form, "quantity"), unitCost: value(form, "unitCost"), notes: value(form, "notes") };
 }
 
 export async function createServiceAction(form: FormData) {
@@ -33,19 +44,25 @@ export async function createServiceAction(form: FormData) {
     const service = await prisma.service.create({ data: { ...data, price: new Prisma.Decimal(data.price) } });
     await prisma.auditLog.create({ data: { userId: admin.id, action: "SERVICE_CREATED", entityType: "Service", entityId: service.id } });
   } catch { redirect("/services?error=Unable+to+create+service"); }
-  updateTag(CACHE_TAGS.catalog); redirect("/services?success=Service+created");
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.catalog); redirect("/services?success=Service+created");
 }
 
 export async function updateServiceAction(form: FormData) {
-  const admin = await requireAdmin(); const id = value(form, "id");
-  const current = await prisma.service.findUnique({ where: { id } });
+  const admin = await requireAdmin();
+  const parsed = serviceUpdateInput.safeParse({ id: value(form, "id"), name: value(form, "name"), price: value(form, "price"), description: value(form, "description"), isActive: value(form, "isActive") });
+  if (!parsed.success) redirect("/services?error=Check+the+service+name,+price,+description,+and+status");
+  const current = await prisma.service.findUnique({ where: { id: parsed.data.id } });
   if (!current) redirect("/services?error=Service+not+found");
-  const price = new Prisma.Decimal(value(form, "price"));
-  await prisma.$transaction(async (tx) => {
-    await tx.service.update({ where: { id }, data: { price, isActive: value(form, "isActive") === "true" } });
-    if (!current.price.equals(price)) await tx.auditLog.create({ data: { userId: admin.id, action: "SERVICE_PRICE_CHANGED", entityType: "Service", entityId: id, oldValues: { price: current.price.toFixed(2) }, newValues: { price: price.toFixed(2) } } });
-  });
-  updateTag(CACHE_TAGS.catalog); redirect("/services?success=Service+updated");
+  const price = new Prisma.Decimal(parsed.data.price); const description = parsed.data.description ?? null;
+  const changed = current.name !== parsed.data.name || !current.price.equals(price) || current.description !== description || current.isActive !== parsed.data.isActive;
+  if (!changed) redirect("/services?success=No+changes+needed");
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.service.update({ where: { id: current.id }, data: { name: parsed.data.name, price, description, isActive: parsed.data.isActive } });
+      await tx.auditLog.create({ data: { userId: admin.id, action: current.price.equals(price) ? "SERVICE_UPDATED" : "SERVICE_PRICE_CHANGED", entityType: "Service", entityId: current.id, oldValues: { name: current.name, price: current.price.toFixed(2), description: current.description, isActive: current.isActive }, newValues: { name: parsed.data.name, price: price.toFixed(2), description, isActive: parsed.data.isActive } } });
+    });
+  } catch { redirect("/services?error=Service+name+may+already+exist+or+the+update+could+not+be+saved"); }
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.catalog); redirect("/services?success=Service+updated");
 }
 
 export async function createPaymentMethodAction(form: FormData) {
@@ -76,8 +93,53 @@ export async function createSupervisorAction(form: FormData) {
 
 export async function toggleSupervisorAction(form: FormData) {
   const admin = await requireAdmin(); const id = value(form, "id"); const isActive = value(form, "isActive") === "true";
-  await prisma.$transaction([prisma.user.update({ where: { id }, data: { isActive } }), prisma.session.deleteMany({ where: { userId: id } }), prisma.auditLog.create({ data: { userId: admin.id, action: isActive ? "USER_ENABLED" : "USER_DISABLED", entityType: "User", entityId: id } })]);
+  const supervisor = await prisma.user.findFirst({ where: { id, role: "SUPERVISOR" }, select: { id: true } });
+  if (!supervisor) redirect("/supervisors?error=Supervisor+account+not+found");
+  await prisma.$transaction([prisma.user.update({ where: { id: supervisor.id }, data: { isActive } }), prisma.session.deleteMany({ where: { userId: supervisor.id } }), prisma.auditLog.create({ data: { userId: admin.id, action: isActive ? "USER_ENABLED" : "USER_DISABLED", entityType: "User", entityId: supervisor.id } })]);
   updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.supervisors); refresh();
+}
+
+export async function updateSupervisorAction(form: FormData) {
+  const admin = await requireAdmin();
+  const parsed = supervisorUpdateInput.safeParse({ id: value(form, "id"), fullName: value(form, "fullName"), username: value(form, "username"), password: value(form, "password") });
+  if (!parsed.success) redirect("/supervisors?error=Check+the+name,+username,+and+password+requirements");
+  const current = await prisma.user.findFirst({ where: { id: parsed.data.id, role: "SUPERVISOR" }, select: { id: true, fullName: true, username: true } });
+  if (!current) redirect("/supervisors?error=Supervisor+account+not+found");
+  try {
+    const username = parsed.data.username.toLowerCase();
+    const password = parsed.data.password ? await hashPassword(parsed.data.password) : undefined;
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: current.id }, data: { name: parsed.data.fullName, fullName: parsed.data.fullName, username, displayUsername: parsed.data.username, email: `${username}@users.swiftwash.invalid` } });
+      if (password) await tx.account.updateMany({ where: { userId: current.id, providerId: "credential" }, data: { password } });
+      await tx.session.deleteMany({ where: { userId: current.id } });
+      await tx.auditLog.create({ data: { userId: admin.id, action: "USER_UPDATED", entityType: "User", entityId: current.id, oldValues: { fullName: current.fullName, username: current.username }, newValues: { fullName: parsed.data.fullName, username, passwordReset: Boolean(password) } } });
+    });
+  } catch {
+    redirect("/supervisors?error=Username+may+already+exist+or+the+account+could+not+be+updated");
+  }
+  updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.supervisors); updateTag(CACHE_TAGS.reports); redirect("/supervisors?success=Supervisor+updated");
+}
+
+export async function deleteSupervisorAction(form: FormData) {
+  const admin = await requireAdmin(); const id = value(form, "id");
+  const current = await prisma.user.findFirst({
+    where: { id, role: "SUPERVISOR" },
+    select: {
+      id: true, fullName: true, username: true,
+      _count: { select: { receiptsCreated: true, receiptsCancelled: true, receiptReprints: true, expensesForSupervisor: true, expensesCreated: true, expensesCancelled: true, purchasesCreated: true, issuesReceived: true, issuesCreated: true, movementsCreated: true } },
+    },
+  });
+  if (!current) redirect("/supervisors?error=Supervisor+account+not+found");
+  if (Object.values(current._count).some((count) => count > 0)) redirect("/supervisors?error=This+supervisor+has+business+history.+Disable+the+account+instead");
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.auditLog.create({ data: { userId: admin.id, action: "USER_DELETED", entityType: "User", entityId: current.id, oldValues: { fullName: current.fullName, username: current.username, role: "SUPERVISOR" } } });
+      await tx.user.delete({ where: { id: current.id } });
+    });
+  } catch {
+    redirect("/supervisors?error=Supervisor+could+not+be+deleted.+Disable+the+account+instead");
+  }
+  updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.supervisors); updateTag(CACHE_TAGS.reports); redirect("/supervisors?success=Supervisor+deleted");
 }
 
 export async function cancelReceiptAction(form: FormData) {
@@ -94,15 +156,29 @@ export async function reprintReceiptAction(form: FormData) {
 export async function createExpenseAction(form: FormData) {
   const admin = await requireAdmin();
   try {
-    await createExpense({ type: value(form, "type"), title: value(form, "title"), expenseDate: new Date(`${value(form, "expenseDate")}T00:00:00`), categoryId: value(form, "categoryId"), supervisorUserId: value(form, "supervisorUserId"), paymentMethodId: value(form, "paymentMethodId"), paymentStatus: value(form, "paymentStatus"), amount: value(form, "amount") || undefined, carCount: value(form, "carCount") || undefined, ratePerCar: value(form, "ratePerCar") || undefined, periodStart: optionalDate(form, "periodStart"), periodEnd: optionalDate(form, "periodEnd"), paymentReference: value(form, "paymentReference"), notes: value(form, "notes"), overrideReason: value(form, "overrideReason") }, admin.id);
+    await createExpense(expenseFormData(form), admin.id);
   } catch (error) { redirect(`/expenses?error=${encodeURIComponent(errorMessage(error))}`); }
-  updateTag(CACHE_TAGS.dashboard); updateTag(CACHE_TAGS.expenses); updateTag(CACHE_TAGS.reports); redirect("/expenses?success=Expense+recorded");
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.dashboard); updateTag(CACHE_TAGS.expenses); updateTag(CACHE_TAGS.reports); redirect("/expenses?success=Expense+recorded");
+}
+
+export async function updateExpenseAction(form: FormData) {
+  const admin = await requireAdmin();
+  try { await updateExpense(value(form, "id"), expenseFormData(form), admin.id); }
+  catch (error) { redirect(`/expenses?error=${encodeURIComponent(errorMessage(error))}`); }
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.dashboard); updateTag(CACHE_TAGS.expenses); updateTag(CACHE_TAGS.reports); redirect("/expenses?success=Expense+updated");
+}
+
+export async function deleteExpenseAction(form: FormData) {
+  const admin = await requireAdmin();
+  try { await deleteExpense(value(form, "id"), admin.id); }
+  catch (error) { redirect(`/expenses?error=${encodeURIComponent(errorMessage(error))}`); }
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.dashboard); updateTag(CACHE_TAGS.expenses); updateTag(CACHE_TAGS.reports); redirect("/expenses?success=Expense+deleted");
 }
 
 export async function cancelExpenseAction(form: FormData) {
   const admin = await requireAdmin();
   try { await cancelExpense(value(form, "id"), value(form, "reason"), admin.id); } catch { redirect("/expenses?error=Expense+could+not+be+cancelled"); }
-  updateTag(CACHE_TAGS.dashboard); updateTag(CACHE_TAGS.expenses); updateTag(CACHE_TAGS.reports); redirect("/expenses?success=Expense+cancelled");
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.dashboard); updateTag(CACHE_TAGS.expenses); updateTag(CACHE_TAGS.reports); redirect("/expenses?success=Expense+cancelled");
 }
 
 export async function createSupplierAction(form: FormData) {
@@ -132,15 +208,29 @@ export async function adjustStockAction(form: FormData) {
 
 export async function createPurchaseAction(form: FormData) {
   const admin = await requireAdmin();
-  try { await createPurchase({ supplierId: value(form, "supplierId"), paymentMethodId: value(form, "paymentMethodId"), supplierInvoiceNumber: value(form, "supplierInvoiceNumber"), purchaseDate: new Date(`${value(form, "purchaseDate")}T00:00:00`), paymentStatus: value(form, "paymentStatus"), inventoryItemId: value(form, "inventoryItemId"), quantity: value(form, "quantity"), unitCost: value(form, "unitCost"), notes: value(form, "notes") }, admin.id); }
+  try { await createPurchase(purchaseFormData(form), admin.id); }
   catch { redirect("/purchases?error=Purchase+could+not+be+created"); }
-  updateTag(CACHE_TAGS.purchases); redirect("/purchases?success=Draft+purchase+created");
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.purchases); redirect("/purchases?success=Draft+purchase+created");
+}
+
+export async function updatePurchaseAction(form: FormData) {
+  const admin = await requireAdmin();
+  try { await updatePurchase(value(form, "id"), purchaseFormData(form), admin.id); }
+  catch (error) { redirect(`/purchases?error=${encodeURIComponent(errorMessage(error))}`); }
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.purchases); redirect("/purchases?success=Draft+purchase+updated");
+}
+
+export async function deletePurchaseAction(form: FormData) {
+  const admin = await requireAdmin();
+  try { await deletePurchase(value(form, "id"), admin.id); }
+  catch (error) { redirect(`/purchases?error=${encodeURIComponent(errorMessage(error))}`); }
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.purchases); redirect("/purchases?success=Draft+purchase+deleted");
 }
 
 export async function receivePurchaseAction(form: FormData) {
   const admin = await requireAdmin();
   try { await receivePurchase(value(form, "id"), admin.id); } catch (error) { redirect(`/purchases?error=${encodeURIComponent(errorMessage(error))}`); }
-  updateTag(CACHE_TAGS.inventory); updateTag(CACHE_TAGS.purchases); redirect("/purchases?success=Purchase+received+and+stock+updated");
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.inventory); updateTag(CACHE_TAGS.purchases); redirect("/purchases?success=Purchase+received+and+stock+updated");
 }
 
 export async function issueInventoryAction(form: FormData) {
