@@ -2,10 +2,11 @@ import { getCurrentUser } from "@/lib/session";
 import { getCachedStockSnapshot } from "@/lib/cached-data";
 import { parseDateRange } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
+import { can } from "@/lib/permissions";
 
 function csv(rows: (string | number)[][]) { return rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n"); }
 export async function GET(request: Request) {
-  const user = await getCurrentUser(); if (!user || user.role !== "ADMIN") return new Response("Forbidden", { status: 403 });
+  const user = await getCurrentUser(); if (!user || !can(user.role, "report:view")) return new Response("Forbidden", { status: 403 });
   const url = new URL(request.url), type = url.searchParams.get("type") ?? "sales", { start, end } = parseDateRange(url.searchParams.get("from") ?? undefined, url.searchParams.get("to") ?? undefined); let rows: (string | number)[][];
   const requestedSupervisorId = url.searchParams.get("supervisorId") || undefined;
   const selectedSupervisor = requestedSupervisorId ? await prisma.user.findFirst({ where: { id: requestedSupervisorId, role: "SUPERVISOR" }, select: { id: true, username: true } }) : null;

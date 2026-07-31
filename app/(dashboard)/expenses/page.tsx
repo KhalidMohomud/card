@@ -6,12 +6,12 @@ import { Flash } from "@/components/flash";
 import { getCatalogData, getExpenseLedger, getReferenceData } from "@/lib/cached-data";
 import { formatDateTime } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
-import { requireAdmin } from "@/lib/session";
+import { requireManagement } from "@/lib/session";
 
 export const metadata = { title: "Expenses" };
 const today = () => new Date().toISOString().slice(0, 10);
 export default async function ExpensesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  await requireAdmin(); const query = await searchParams; const page = Math.max(Number(query.page) || 1, 1);
+  await requireManagement(); const query = await searchParams; const page = Math.max(Number(query.page) || 1, 1);
   const [ledger, catalog, references] = await Promise.all([getExpenseLedger(page), getCatalogData(), getReferenceData()]);
   const expenses = ledger.rows, total = ledger.total;
   const categories = references.categories, supervisors = references.supervisors.filter((row) => row.isActive), methods = catalog.methods.filter((row) => row.isActive), settings = catalog.settings;

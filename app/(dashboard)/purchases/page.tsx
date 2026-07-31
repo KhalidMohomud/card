@@ -9,12 +9,12 @@ import { PurchaseActions } from "@/components/purchase-manager";
 import { getCatalogData, getPurchaseLedger, getReferenceData } from "@/lib/cached-data";
 import { formatDateTime } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
-import { requireAdmin } from "@/lib/session";
+import { requireManagement } from "@/lib/session";
 
 export const metadata = { title: "Purchases" };
 
 export default async function PurchasesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  await requireAdmin();
+  await requireManagement();
   const query = await searchParams;
   const [purchases, catalog, references] = await Promise.all([getPurchaseLedger(query.q), getCatalogData(), getReferenceData()]);
   const suppliers = references.suppliers, methods = catalog.methods.filter((row) => row.isActive), items = references.inventoryItems, settings = catalog.settings;

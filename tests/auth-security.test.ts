@@ -16,7 +16,7 @@ describe("authentication security", () => {
   });
 
   it("requires strong supervisor passwords", () => {
-    expect(supervisorInput.safeParse({ fullName: "Test Supervisor", username: "tester", password: "weakpassword" }).success).toBe(false);
-    expect(supervisorInput.safeParse({ fullName: "Test Supervisor", username: "tester", password: "Strong.Password-2026" }).success).toBe(true);
+    expect(supervisorInput.safeParse({ fullName: "Test Supervisor", username: "tester", password: "weakpassword", role: "SUPERVISOR" }).success).toBe(false);
+    expect(supervisorInput.safeParse({ fullName: "Test Supervisor", username: "tester", password: "Strong.Password-2026", role: "MANAGER" }).success).toBe(true);
   });
 });

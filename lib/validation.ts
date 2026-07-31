@@ -21,12 +21,14 @@ export const supervisorInput = z.object({
   fullName: requiredText,
   username: z.string().trim().min(3).max(30).regex(/^[a-zA-Z0-9_.]+$/),
   password: strongPassword,
+  role: z.enum(["SUPERVISOR", "MANAGER"]),
 });
 export const supervisorUpdateInput = z.object({
   id: z.string().cuid(),
   fullName: requiredText,
   username: z.string().trim().min(3).max(30).regex(/^[a-zA-Z0-9_.]+$/),
   password: z.union([z.literal(""), strongPassword]).transform((password) => password || undefined),
+  role: z.enum(["SUPERVISOR", "MANAGER"]),
 });
 export const passwordChangeInput = z.object({ currentPassword: z.string().min(1).max(128), newPassword: strongPassword, confirmPassword: z.string() }).refine((data) => data.newPassword === data.confirmPassword, { path: ["confirmPassword"], message: "Passwords do not match" }).refine((data) => data.currentPassword !== data.newPassword, { path: ["newPassword"], message: "Choose a different password" });
 export const cancellationInput = z.object({ id: z.coerce.number().int().positive(), reason: z.string().trim().min(5).max(500) });

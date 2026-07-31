@@ -1,27 +1,27 @@
-import { Plus, UserRoundCheck } from "lucide-react";
-import { createSupervisorAction, toggleSupervisorAction } from "@/app/actions";
+import { toggleSupervisorAction } from "@/app/actions";
 import { Flash } from "@/components/flash";
+import { StaffAccountCreateDialog } from "@/components/staff-account-create-dialog";
 import { SupervisorAccountManager } from "@/components/supervisor-account-manager";
 import { getSupervisorAccounts } from "@/lib/cached-data";
 import { formatDateTime } from "@/lib/dates";
-import { requireAdmin } from "@/lib/session";
+import { requireManagement } from "@/lib/session";
 
-export const metadata = { title: "Supervisors" };
+export const metadata = { title: "Staff access" };
 export default async function SupervisorsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  await requireAdmin(); const query = await searchParams; const users = await getSupervisorAccounts();
+  const operator = await requireManagement(); const query = await searchParams; const users = await getSupervisorAccounts();
   return <div className="page">
     <div className="page-head">
       <div>
         <span className="eyebrow">Access control</span>
-        <h1>Supervisors</h1>
-        <p>Create accounts, update sign-in details, and control POS access.</p>
+        <h1>Staff access</h1>
+        <p>Managers run daily operations. Supervisors have focused POS access.</p>
       </div>
+      <StaffAccountCreateDialog operatorRole={operator.role} />
     </div>
     <Flash success={query.success} error={query.error} />
-    <div className="grid two-grid">
-      <div className="card">
+    <div className="card">
         <div className="card-head">
-          <h2>Supervisor accounts</h2>
+          <h2>Manager and supervisor accounts</h2>
           <span className="badge">{users.length}</span>
         </div>
         <div className="table-wrap supervisor-table-wrap">
@@ -30,7 +30,7 @@ export default async function SupervisorsPage({ searchParams }: { searchParams: 
               <tr>
                 <th>Name</th>
                 <th>Username</th>
-
+                <th>Role</th>
                 <th>Created</th>
                 <th>Account status</th>
                 <th>Manage</th>
@@ -42,48 +42,29 @@ export default async function SupervisorsPage({ searchParams }: { searchParams: 
                   <strong>{user.fullName}</strong>
                 </td>
                 <td data-label="Username">@{user.displayUsername || user.username}</td>
-                {/* <td data-label="Receipts">{user._count.receiptsCreated}</td> */}
+                <td data-label="Role"><span className={`badge ${user.role === "MANAGER" ? "warning" : ""}`}>{user.role}</span></td>
                 <td data-label="Created">{formatDateTime(user.createdAt)}</td>
                 <td data-label="Status">
                   <div className="actions supervisor-status">
                     <span className={`badge ${user.isActive ? "success" : "danger"}`}>
                       {user.isActive ? "Active" : "Disabled"}
-                    </span><form action={toggleSupervisorAction}>
+                    </span>{(operator.role === "ADMIN" || user.role === "SUPERVISOR") && <form action={toggleSupervisorAction}>
                       <input type="hidden" name="id" value={user.id} />
                       <input type="hidden" name="isActive" value={String(!user.isActive)} />
                       <button className={`btn ${user.isActive ? "btn-danger" : "btn-soft"}`}>
                         {user.isActive ? "Disable" : "Enable"}</button>
-                    </form>
+                    </form>}
                   </div>
                 </td>
                 <td data-label="Manage">
-                  <SupervisorAccountManager user={user} />
+                  {operator.role === "ADMIN" || user.role === "SUPERVISOR"
+                    ? <SupervisorAccountManager user={user} canEditRole={operator.role === "ADMIN"} />
+                    : <span className="muted">Admin only</span>}
                 </td>
               </tr>)}
             </tbody>
           </table>
         </div>
-      </div>
-      <form action={createSupervisorAction} className="card card-pad">
-        <span className="stat-icon" style={{ marginBottom: 16 }}><UserRoundCheck size={19} />
-        </span>
-        <h2>Create supervisor</h2>
-        <p className="muted">Passwords are salted and hashed with scrypt. Plain-text passwords are never stored.</p>
-        <div className="field"><label>Full name</label>
-          <input className="input" name="fullName" maxLength={120} autoComplete="name" required />
-        </div><div className="field" style={{ marginTop: 12 }}>
-          <label>Username</label>
-          <input className="input" name="username" minLength={3} maxLength={30} pattern="[A-Za-z0-9_.]+" title="Use only letters, numbers, dots, and underscores" autoCapitalize="none" spellCheck={false} autoComplete="off" required />
-        </div>
-        <div className="field" style={{ marginTop: 12 }}>
-          <label>password</label>
-          <input className="input" type="password" name="password" minLength={12} maxLength={128} pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{12,128}" title="Use 12+ characters with uppercase, lowercase, a number, and a symbol" autoComplete="new-password" required />
-        </div>
-        <div className="password-requirements">
-          <span>Use 12+ characters with uppercase, lowercase, a number, and a symbol.</span>
-        </div>
-        <button className="btn btn-primary btn-block" style={{ marginTop: 16 }}><Plus size={16} /> Create account</button>
-      </form>
     </div>
   </div>;
 }

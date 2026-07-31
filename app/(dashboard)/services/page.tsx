@@ -3,12 +3,12 @@ import { createPaymentMethodAction, createServiceAction, togglePaymentMethodActi
 import { Flash } from "@/components/flash";
 import { ServiceCatalogManager } from "@/components/service-catalog-manager";
 import { getCatalogData } from "@/lib/cached-data";
-import { requireAdmin } from "@/lib/session";
+import { requireManagement } from "@/lib/session";
 
 export const metadata = { title: "Services" };
 
 export default async function ServicesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  await requireAdmin();
+  await requireManagement();
   const query = await searchParams;
   const { services, methods, settings } = await getCatalogData();
 

@@ -4,13 +4,13 @@ import { Empty } from "@/components/empty";
 import { getReferenceData, getReportSnapshot } from "@/lib/cached-data";
 import { formatDateTime, parseDateRange } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
-import { requireAdmin } from "@/lib/session";
+import { requireManagement } from "@/lib/session";
 
 export const metadata = { title: "Reports" };
 const reportNames = ["Daily sales", "Monthly sales", "Sales by service", "Sales by supervisor", "Sales by payment method", "Receipt history", "Cancelled receipts", "General expenses", "Worker commissions", "Supervisor salaries", "Purchases", "Current stock", "Low-stock items", "Inventory issued", "Damaged & lost", "Movement history", "Cash summary"];
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  await requireAdmin();
+  await requireManagement();
   const query = await searchParams;
   const { start, end } = parseDateRange(query.from, query.to);
   const references = await getReferenceData();

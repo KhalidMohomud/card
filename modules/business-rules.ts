@@ -8,7 +8,7 @@ export function receiptSnapshot(service: { id: string; name: string; price: Pris
   return { serviceId: service.id, paymentMethodId: input.paymentMethodId, paymentReference: input.paymentReference, idempotencyKey: input.idempotencyKey, createdByUserId: userId, serviceNameSnapshot: service.name, servicePriceSnapshot: service.price };
 }
 
-export function roleCanManageServices(role: UserRole) { return role === "ADMIN"; }
+export function roleCanManageServices(role: UserRole) { return role === "ADMIN" || role === "MANAGER"; }
 
 export function reusableBalances(owned: Prisma.Decimal, issued: Prisma.Decimal, returned: Prisma.Decimal, damaged: Prisma.Decimal, lost: Prisma.Decimal) {
   const assigned = issued.sub(returned).sub(damaged).sub(lost);
@@ -33,7 +33,7 @@ export function canRemoveStock(available: Prisma.Decimal, requested: Prisma.Deci
   return requested.greaterThan(0) && available.greaterThanOrEqualTo(requested);
 }
 
-export function canViewSalaryExpenses(role: UserRole) { return role === "ADMIN"; }
+export function canViewSalaryExpenses(role: UserRole) { return role === "ADMIN" || role === "MANAGER"; }
 export function canStartSession(isActive: boolean) { return isActive; }
 export function nextPrintCount(current: number) { return current + 1; }
 export function purchaseMovementCount(itemCount: number, alreadyReceived: boolean) { return alreadyReceived ? 0 : itemCount; }

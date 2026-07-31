@@ -35,4 +35,10 @@ export async function requireRole(role: UserRole) {
   return user;
 }
 
+export async function requireManagement() {
+  const user = await requireUser();
+  if (user.role === "SUPERVISOR") redirect("/pos");
+  return user;
+}
+
 export async function requireAdmin() { return requireRole("ADMIN"); }

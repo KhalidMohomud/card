@@ -19,6 +19,11 @@ const permissions: Record<UserRole, ReadonlySet<Permission>> = {
     "service:manage", "user:manage", "expense:manage", "inventory:manage",
     "report:view", "settings:manage", "audit:view",
   ]),
+  MANAGER: new Set<Permission>([
+    "receipt:create", "receipt:view-all", "receipt:cancel", "receipt:reprint",
+    "service:manage", "user:manage", "expense:manage", "inventory:manage",
+    "report:view",
+  ]),
   SUPERVISOR: new Set<Permission>(["receipt:create", "receipt:reprint"]),
 };
 

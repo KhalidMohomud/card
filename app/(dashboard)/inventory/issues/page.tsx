@@ -5,11 +5,11 @@ import { Empty } from "@/components/empty";
 import { Flash } from "@/components/flash";
 import { getIssueLedger, getReferenceData } from "@/lib/cached-data";
 import { formatDateTime } from "@/lib/dates";
-import { requireAdmin } from "@/lib/session";
+import { requireManagement } from "@/lib/session";
 
 export const metadata = { title: "Inventory issues" };
 export default async function InventoryIssuesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  await requireAdmin(); const query = await searchParams; const [issues, references] = await Promise.all([
+  await requireManagement(); const query = await searchParams; const [issues, references] = await Promise.all([
     getIssueLedger(),
     getReferenceData(),
   ]);

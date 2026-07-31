@@ -48,9 +48,9 @@ export const getReferenceData = unstable_cache(async () => {
 }, ["swiftwash-reference-v1"], { tags: [CACHE_TAGS.reference], revalidate: 60 * 60 });
 
 export const getSupervisorAccounts = unstable_cache(async () => {
-  const users = await prisma.user.findMany({ where: { role: "SUPERVISOR" }, orderBy: { createdAt: "desc" }, select: { id: true, fullName: true, username: true, displayUsername: true, isActive: true, createdAt: true, _count: { select: { receiptsCreated: true } } } });
+  const users = await prisma.user.findMany({ where: { role: { in: ["SUPERVISOR", "MANAGER"] } }, orderBy: { createdAt: "desc" }, select: { id: true, fullName: true, username: true, displayUsername: true, role: true, isActive: true, createdAt: true, _count: { select: { receiptsCreated: true } } } });
   return users.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }));
-}, ["swiftwash-supervisor-accounts-v1"], { tags: [CACHE_TAGS.supervisors, CACHE_TAGS.reference], revalidate: 5 * 60 });
+}, ["swiftwash-staff-accounts-v2"], { tags: [CACHE_TAGS.supervisors, CACHE_TAGS.reference], revalidate: 5 * 60 });
 
 const getReceiptLedgerForQuery = unstable_cache(async (statusValue: string, fromValue: string, toValue: string, searchValue: string, page: number) => {
   const status = statusValue === "COMPLETED" || statusValue === "CANCELLED" ? statusValue : undefined;

@@ -16,11 +16,13 @@ describe("financial business rules", () => {
 
   it("does not allow supervisors to manage services", () => {
     expect(roleCanManageServices("SUPERVISOR")).toBe(false);
+    expect(roleCanManageServices("MANAGER")).toBe(true);
     expect(roleCanManageServices("ADMIN")).toBe(true);
   });
 
-  it("keeps salary expenses admin-only and blocks inactive sessions", () => {
+  it("allows management roles to view salaries and blocks inactive sessions", () => {
     expect(canViewSalaryExpenses("SUPERVISOR")).toBe(false);
+    expect(canViewSalaryExpenses("MANAGER")).toBe(true);
     expect(canViewSalaryExpenses("ADMIN")).toBe(true);
     expect(canStartSession(false)).toBe(false);
   });
