@@ -1,7 +1,7 @@
 "use client";
 
 import type { UserRole } from "@prisma/client";
-import { Plus, ShieldCheck, UserPlus, X } from "lucide-react";
+import { Plus, UserPlus, X } from "lucide-react";
 import { useRef } from "react";
 import { useFormStatus } from "react-dom";
 import { createSupervisorAction } from "@/app/actions";
@@ -52,7 +52,6 @@ export function StaffAccountCreateDialog({ operatorRole }: { operatorRole: UserR
               <small>Use 12+ characters with uppercase, lowercase, a number, and a symbol.</small>
             </div>
           </div>
-          <div className="account-security-note"><ShieldCheck size={18} /><div><strong>Secure credentials</strong><span>{operatorRole === "ADMIN" ? "Passwords are salted and hashed. Manager access excludes Settings and Audit logs." : "Passwords are salted and hashed. Managers can create supervisor accounts only."}</span></div></div>
           <div className="account-dialog-actions">
             <button className="btn btn-ghost" type="button" onClick={closeAndReset}>Cancel</button>
             <PendingCreateButton />

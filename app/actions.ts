@@ -110,7 +110,7 @@ export async function createSupervisorAction(form: FormData) {
       await tx.auditLog.create({ data: { userId: operator.id, action: "USER_CREATED", entityType: "User", entityId: user.id, newValues: { role: data.role, username } } });
     });
   } catch { redirect("/supervisors?error=The+staff+account+could+not+be+created.+Please+try+again"); }
-  updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.supervisors); redirect("/supervisors?success=Staff+account+created");
+  updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.supervisors); redirect("/supervisors?success=Staff+account+created+successfully");
 }
 
 export async function toggleSupervisorAction(form: FormData) {
@@ -119,7 +119,7 @@ export async function toggleSupervisorAction(form: FormData) {
   if (!staff) redirect("/supervisors?error=Staff+account+not+found");
   if (!canManageStaffAccount(operator.role, staff.role)) redirect("/supervisors?error=Only+an+administrator+can+manage+manager+accounts");
   await prisma.$transaction([prisma.user.update({ where: { id: staff.id }, data: { isActive } }), prisma.session.deleteMany({ where: { userId: staff.id } }), prisma.auditLog.create({ data: { userId: operator.id, action: isActive ? "USER_ENABLED" : "USER_DISABLED", entityType: "User", entityId: staff.id } })]);
-  updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.supervisors); refresh();
+  updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.supervisors); redirect(`/supervisors?success=Staff+account+${isActive ? "enabled" : "disabled"}+successfully`);
 }
 
 export async function updateSupervisorAction(form: FormData) {
@@ -141,7 +141,7 @@ export async function updateSupervisorAction(form: FormData) {
   } catch {
     redirect("/supervisors?error=Username+may+already+exist+or+the+account+could+not+be+updated");
   }
-  updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.supervisors); updateTag(CACHE_TAGS.reports); redirect("/supervisors?success=Staff+account+updated");
+  updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.supervisors); updateTag(CACHE_TAGS.reports); redirect("/supervisors?success=Staff+account+updated+successfully");
 }
 
 export async function deleteSupervisorAction(form: FormData) {
@@ -164,7 +164,7 @@ export async function deleteSupervisorAction(form: FormData) {
   } catch {
     redirect("/supervisors?error=Staff+account+could+not+be+deleted.+Disable+it+instead");
   }
-  updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.supervisors); updateTag(CACHE_TAGS.reports); redirect("/supervisors?success=Staff+account+deleted");
+  updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.supervisors); updateTag(CACHE_TAGS.reports); redirect("/supervisors?success=Staff+account+deleted+successfully");
 }
 
 export async function cancelReceiptAction(form: FormData) {
@@ -235,27 +235,27 @@ export async function createPurchaseAction(form: FormData) {
   const admin = await requireManagement();
   try { await createPurchase(purchaseFormData(form), admin.id); }
   catch { redirect("/purchases?error=Purchase+could+not+be+created"); }
-  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.purchases); redirect("/purchases?success=Draft+purchase+created");
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.purchases); redirect("/purchases?success=Draft+purchase+created+successfully");
 }
 
 export async function updatePurchaseAction(form: FormData) {
   const admin = await requireManagement();
   try { await updatePurchase(value(form, "id"), purchaseFormData(form), admin.id); }
   catch (error) { redirect(`/purchases?error=${encodeURIComponent(errorMessage(error))}`); }
-  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.purchases); redirect("/purchases?success=Draft+purchase+updated");
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.purchases); redirect("/purchases?success=Draft+purchase+updated+successfully");
 }
 
 export async function deletePurchaseAction(form: FormData) {
   const admin = await requireManagement();
   try { await deletePurchase(value(form, "id"), admin.id); }
   catch (error) { redirect(`/purchases?error=${encodeURIComponent(errorMessage(error))}`); }
-  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.purchases); redirect("/purchases?success=Draft+purchase+deleted");
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.purchases); redirect("/purchases?success=Draft+purchase+deleted+successfully");
 }
 
 export async function receivePurchaseAction(form: FormData) {
   const admin = await requireManagement();
   try { await receivePurchase(value(form, "id"), admin.id); } catch (error) { redirect(`/purchases?error=${encodeURIComponent(errorMessage(error))}`); }
-  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.inventory); updateTag(CACHE_TAGS.purchases); redirect("/purchases?success=Purchase+received+and+stock+updated");
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.inventory); updateTag(CACHE_TAGS.purchases); redirect("/purchases?success=Purchase+received+and+stock+updated+successfully");
 }
 
 export async function issueInventoryAction(form: FormData) {
