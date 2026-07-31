@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { CircleDollarSign, Pencil, Save, Trash2, X } from "lucide-react";
-import { cancelExpenseAction, deleteExpenseAction, updateExpenseAction } from "@/app/actions";
+import { deleteExpenseAction, updateExpenseAction } from "@/app/actions";
 
 type Option = { id: string; name: string };
 type Supervisor = { id: string; fullName: string; isActive: boolean };
@@ -45,7 +45,6 @@ export function ExpenseManager({ expense, categories, supervisors, methods }: { 
           <p className="record-audit-note">Changes are recorded in the audit log.</p>
           <div className="account-dialog-actions"><button className="btn btn-ghost" type="button" onClick={() => dialog.current?.close()}>Cancel</button><SaveButton /></div>
         </form> : <div className="record-locked-note">This expense is cancelled and cannot be edited. You can permanently remove it below if it was entered by mistake.</div>}
-        {expense.status === "ACTIVE" && <div className="record-cancel-zone"><div><strong>Keep history and cancel</strong><p>Recommended for a real transaction that should remain visible in the ledger.</p></div><form action={cancelExpenseAction}><input type="hidden" name="id" value={expense.id} /><input className="input" name="reason" placeholder="Cancellation reason" minLength={5} required /><CancelButton /></form></div>}
         <div className="danger-zone"><div><strong>Delete this expense</strong><p>Use only for an entry created by mistake. The deletion event remains in the audit log.</p></div><form action={deleteExpenseAction}><input type="hidden" name="id" value={expense.id} /><DeleteButton label={expense.title} /></form></div>
       </div>
     </dialog>
@@ -61,5 +60,4 @@ function MoneyField({ id, defaultValue }: { id: string; defaultValue: string }) 
 }
 
 function SaveButton() { const { pending } = useFormStatus(); return <button className="btn btn-primary" disabled={pending}><Save size={15} />{pending ? "Saving…" : "Save changes"}</button>; }
-function CancelButton() { const { pending } = useFormStatus(); return <button className="btn btn-ghost" disabled={pending}>{pending ? "Cancelling…" : "Cancel record"}</button>; }
 function DeleteButton({ label }: { label: string }) { const { pending } = useFormStatus(); return <button className="btn btn-danger" disabled={pending} onClick={(event) => { if (!window.confirm(`Permanently delete “${label}”? This cannot be undone.`)) event.preventDefault(); }}><Trash2 size={15} />{pending ? "Deleting…" : "Delete expense"}</button>; }

@@ -183,21 +183,21 @@ export async function createExpenseAction(form: FormData) {
   try {
     await createExpense(expenseFormData(form), admin.id);
   } catch (error) { redirect(`/expenses?error=${encodeURIComponent(errorMessage(error))}`); }
-  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.dashboard); updateTag(CACHE_TAGS.expenses); updateTag(CACHE_TAGS.reports); redirect("/expenses?success=Expense+recorded");
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.dashboard); updateTag(CACHE_TAGS.expenses); updateTag(CACHE_TAGS.reports); redirect("/expenses?success=Expense+recorded+successfully");
 }
 
 export async function updateExpenseAction(form: FormData) {
   const admin = await requireManagement();
   try { await updateExpense(value(form, "id"), expenseFormData(form), admin.id); }
   catch (error) { redirect(`/expenses?error=${encodeURIComponent(errorMessage(error))}`); }
-  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.dashboard); updateTag(CACHE_TAGS.expenses); updateTag(CACHE_TAGS.reports); redirect("/expenses?success=Expense+updated");
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.dashboard); updateTag(CACHE_TAGS.expenses); updateTag(CACHE_TAGS.reports); redirect("/expenses?success=Expense+updated+successfully");
 }
 
 export async function deleteExpenseAction(form: FormData) {
   const admin = await requireManagement();
   try { await deleteExpense(value(form, "id"), admin.id); }
   catch (error) { redirect(`/expenses?error=${encodeURIComponent(errorMessage(error))}`); }
-  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.dashboard); updateTag(CACHE_TAGS.expenses); updateTag(CACHE_TAGS.reports); redirect("/expenses?success=Expense+deleted");
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.dashboard); updateTag(CACHE_TAGS.expenses); updateTag(CACHE_TAGS.reports); redirect("/expenses?success=Expense+deleted+successfully");
 }
 
 export async function cancelExpenseAction(form: FormData) {
