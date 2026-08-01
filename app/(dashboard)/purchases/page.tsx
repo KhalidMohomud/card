@@ -7,7 +7,7 @@ import { Flash } from "@/components/flash";
 import { PurchaseCreateDialog } from "@/components/purchase-create-dialog";
 import { PurchaseActions } from "@/components/purchase-manager";
 import { getCatalogData, getPurchaseLedger, getReferenceData } from "@/lib/cached-data";
-import { formatDateTime } from "@/lib/dates";
+import { businessDateInputValue, formatDateTime } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { requireManagement } from "@/lib/session";
 
@@ -20,7 +20,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams: Pr
   const suppliers = references.suppliers, methods = catalog.methods.filter((row) => row.isActive), items = references.inventoryItems, settings = catalog.settings;
 
   return <div className="page">
-    <div className="page-head"><div><span className="eyebrow">Stock intake</span><h1>Purchases</h1><p>Drafts can be edited or deleted. Receiving posts stock and locks the purchase.</p></div><PurchaseCreateDialog suppliers={suppliers} methods={methods} items={items} today={new Date().toISOString().slice(0, 10)} /></div>
+    <div className="page-head"><div><span className="eyebrow">Stock intake</span><h1>Purchases</h1><p>Drafts can be edited or deleted. Receiving posts stock and locks the purchase.</p></div><PurchaseCreateDialog suppliers={suppliers} methods={methods} items={items} today={businessDateInputValue()} /></div>
     <Flash success={query.success} error={query.error} />
     <div className="card">
         <div className="card-head service-catalog-head"><div><h2>Purchase history</h2>{query.q && <span className="service-result-count">{purchases.length} found</span>}</div><div className="ledger-search-actions"><Form action="/purchases" className="catalog-search"><Search size={17} /><input name="q" defaultValue={query.q} placeholder="Supplier, invoice, item, status…" aria-label="Search purchases" /><button type="submit" aria-label="Search purchases"><Search size={15} /></button></Form>{query.q && <Link className="btn btn-ghost btn-compact" href="/purchases"><X size={14} /> Clear</Link>}</div></div>

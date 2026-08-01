@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { refresh, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { CACHE_TAGS } from "@/lib/cached-data";
+import { businessDateStart } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, requireManagement, requireUser } from "@/lib/session";
 import { cancellationInput, passwordChangeInput, paymentMethodInput, serviceInput, serviceUpdateInput, settingsInput, supervisorInput, supervisorUpdateInput } from "@/lib/validation";
@@ -17,7 +18,7 @@ import { createInventoryCategory, createInventoryItem, createSupplier, deleteInv
 import { createPurchase, deletePurchase, receivePurchase, updatePurchase } from "@/modules/purchases/service";
 
 function value(form: FormData, key: string) { return String(form.get(key) ?? ""); }
-function optionalDate(form: FormData, key: string) { const v = value(form, key); return v ? new Date(`${v}T00:00:00`) : undefined; }
+function optionalDate(form: FormData, key: string) { const v = value(form, key); return v ? businessDateStart(v) : undefined; }
 function errorMessage(error: unknown) {
   if (!(error instanceof Error)) return "The request could not be completed.";
   if (error.message.startsWith("OVERRIDE_REQUIRED:")) return `Commission exceeds the ${error.message.split(":")[1]} completed receipts. Add an override reason to continue.`;
@@ -39,11 +40,11 @@ function errorMessage(error: unknown) {
 }
 
 function expenseFormData(form: FormData) {
-  return { type: value(form, "type"), title: value(form, "title"), expenseDate: new Date(`${value(form, "expenseDate")}T00:00:00`), categoryId: value(form, "categoryId"), supervisorUserId: value(form, "supervisorUserId"), paymentMethodId: value(form, "paymentMethodId"), paymentStatus: value(form, "paymentStatus"), amount: value(form, "amount") || undefined, carCount: value(form, "carCount") || undefined, ratePerCar: value(form, "ratePerCar") || undefined, periodStart: optionalDate(form, "periodStart"), periodEnd: optionalDate(form, "periodEnd"), paymentReference: value(form, "paymentReference"), notes: value(form, "notes"), overrideReason: value(form, "overrideReason") };
+  return { type: value(form, "type"), title: value(form, "title"), expenseDate: businessDateStart(value(form, "expenseDate")), categoryId: value(form, "categoryId"), supervisorUserId: value(form, "supervisorUserId"), paymentMethodId: value(form, "paymentMethodId"), paymentStatus: value(form, "paymentStatus"), amount: value(form, "amount") || undefined, carCount: value(form, "carCount") || undefined, ratePerCar: value(form, "ratePerCar") || undefined, periodStart: optionalDate(form, "periodStart"), periodEnd: optionalDate(form, "periodEnd"), paymentReference: value(form, "paymentReference"), notes: value(form, "notes"), overrideReason: value(form, "overrideReason") };
 }
 
 function purchaseFormData(form: FormData) {
-  return { supplierId: value(form, "supplierId"), paymentMethodId: value(form, "paymentMethodId"), supplierInvoiceNumber: value(form, "supplierInvoiceNumber"), purchaseDate: new Date(`${value(form, "purchaseDate")}T00:00:00`), paymentStatus: value(form, "paymentStatus"), inventoryItemId: value(form, "inventoryItemId"), quantity: value(form, "quantity"), unitCost: value(form, "unitCost"), notes: value(form, "notes") };
+  return { supplierId: value(form, "supplierId"), paymentMethodId: value(form, "paymentMethodId"), supplierInvoiceNumber: value(form, "supplierInvoiceNumber"), purchaseDate: businessDateStart(value(form, "purchaseDate")), paymentStatus: value(form, "paymentStatus"), inventoryItemId: value(form, "inventoryItemId"), quantity: value(form, "quantity"), unitCost: value(form, "unitCost"), notes: value(form, "notes") };
 }
 
 function inventoryItemFormData(form: FormData) {
@@ -316,7 +317,7 @@ export async function receivePurchaseAction(form: FormData) {
 
 export async function issueInventoryAction(form: FormData) {
   const admin = await requireManagement();
-  try { await issueInventory({ supervisorUserId: value(form, "supervisorUserId"), issueDate: new Date(`${value(form, "issueDate")}T00:00:00`), inventoryItemId: value(form, "inventoryItemId"), quantity: value(form, "quantity"), notes: value(form, "notes") }, admin.id); }
+  try { await issueInventory({ supervisorUserId: value(form, "supervisorUserId"), issueDate: businessDateStart(value(form, "issueDate")), inventoryItemId: value(form, "inventoryItemId"), quantity: value(form, "quantity"), notes: value(form, "notes") }, admin.id); }
   catch (error) { redirect(`/inventory/issues?error=${encodeURIComponent(errorMessage(error))}`); }
   updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.inventory); updateTag(CACHE_TAGS.issues); redirect("/inventory/issues?success=Inventory+issued+successfully");
 }

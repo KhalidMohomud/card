@@ -123,7 +123,6 @@ export function parseDateRange(from?: string, to?: string) {
   // A stable end-of-day value lets identical report requests share one cache
   // entry. Writes invalidate the report tag, so today's figures remain fresh.
   const end = to ? businessDateEnd(to) : new Date(periods.tomorrowStart.getTime() - 1);
-  if (start > end) throw new Error("INVALID_DATE_RANGE");
   return { start, end };
 }
 

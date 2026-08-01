@@ -52,6 +52,11 @@ a { color: inherit; text-decoration: none; }
 .eyebrow { color: var(--brand); text-transform: uppercase; letter-spacing: 1.4px; font-size: 11px; font-weight: 800; margin-bottom: 9px; display: block; }
 .grid { display: grid; gap: 18px; }
 .stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.dashboard-period { display: flex; align-items: center; gap: 12px; margin: -8px 0 18px; padding: 12px 15px; border: 1px solid #d7e7df; border-radius: 14px; background: #f3faf6; color: var(--ink); }
+.dashboard-period > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.dashboard-period span:not(.stat-icon) { color: var(--muted); font-size: 12px; }
+.card-subtitle { display: block; margin-top: 4px; font-size: 12px; }
+.dashboard-footnote { font-size: 12px; margin: 18px 0 0; }
 .two-grid { grid-template-columns: minmax(0, 1.55fr) minmax(280px, .8fr); }
 .three-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 3px 13px #173a2b08; }
