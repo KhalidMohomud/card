@@ -190,10 +190,10 @@ export const getIssueLedger = unstable_cache(async () => {
   const rows = await prisma.inventoryIssue.findMany({
     orderBy: { issueDate: "desc" },
     take: 50,
-    select: { id: true, issueDate: true, status: true, supervisor: { select: { fullName: true } }, items: { select: { id: true, quantityIssued: true, inventoryItem: { select: { name: true, type: true } } } } },
+    select: { id: true, issueDate: true, status: true, notes: true, closedAt: true, supervisor: { select: { fullName: true } }, items: { select: { id: true, quantityIssued: true, quantityReturned: true, quantityDamaged: true, quantityLost: true, notes: true, inventoryItem: { select: { name: true, sku: true, type: true, unit: true } } } } },
   });
-  return rows.map((row) => ({ id: row.id, issueDate: row.issueDate.toISOString(), status: row.status, supervisor: row.supervisor, items: row.items.map((item) => ({ id: item.id, quantityIssued: item.quantityIssued.toString(), inventoryItem: item.inventoryItem })) }));
-}, ["swiftwash-issue-ledger-v1"], { tags: [CACHE_TAGS.issues], revalidate: 5 * 60 });
+  return rows.map((row) => ({ id: row.id, issueDate: row.issueDate.toISOString(), status: row.status, notes: row.notes, closedAt: row.closedAt?.toISOString() ?? null, supervisor: row.supervisor, items: row.items.map((item) => ({ id: item.id, quantityIssued: item.quantityIssued.toString(), quantityReturned: item.quantityReturned.toString(), quantityDamaged: item.quantityDamaged.toString(), quantityLost: item.quantityLost.toString(), notes: item.notes, inventoryItem: item.inventoryItem })) }));
+}, ["swiftwash-issue-ledger-v2"], { tags: [CACHE_TAGS.issues], revalidate: 5 * 60 });
 
 const getAuditLedgerForQuery = unstable_cache(async (action: string, entity: string, page: number) => {
   const take = 50;

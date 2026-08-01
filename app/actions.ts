@@ -28,6 +28,7 @@ function errorMessage(error: unknown) {
     PURCHASE_NOT_DELETABLE: "Only draft purchases can be deleted. Received purchases are locked because stock was already posted.",
     REUSABLE_ITEMS_MUST_BE_ACCOUNTED_FOR: "All reusable items must be returned, damaged, or lost before closing.",
     QUANTITY_EXCEEDS_ISSUED: "Returned, damaged, and lost quantities exceed the issued quantity.",
+    ISSUE_NOT_OPEN: "This inventory issue is already closed or no longer available.", ITEM_OR_SUPERVISOR_UNAVAILABLE: "Choose an active supervisor and inventory item.",
     INVENTORY_CATEGORY_NOT_FOUND: "This category no longer exists.", INVENTORY_CATEGORY_UNAVAILABLE: "Choose an available inventory category.",
     INVENTORY_CATEGORY_NOT_DELETABLE: "This category contains inventory items. Archive it instead of deleting it.",
     INVENTORY_ITEM_NOT_FOUND: "This inventory item no longer exists.", INVENTORY_ITEM_NOT_DELETABLE: "This item has stock or transaction history. Archive it instead of deleting it.",
@@ -317,14 +318,14 @@ export async function issueInventoryAction(form: FormData) {
   const admin = await requireManagement();
   try { await issueInventory({ supervisorUserId: value(form, "supervisorUserId"), issueDate: new Date(`${value(form, "issueDate")}T00:00:00`), inventoryItemId: value(form, "inventoryItemId"), quantity: value(form, "quantity"), notes: value(form, "notes") }, admin.id); }
   catch (error) { redirect(`/inventory/issues?error=${encodeURIComponent(errorMessage(error))}`); }
-  updateTag(CACHE_TAGS.inventory); updateTag(CACHE_TAGS.issues); redirect("/inventory/issues?success=Inventory+issued");
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.inventory); updateTag(CACHE_TAGS.issues); redirect("/inventory/issues?success=Inventory+issued+successfully");
 }
 
 export async function closeIssueAction(form: FormData) {
   const admin = await requireManagement();
   try { await closeInventoryIssue({ issueItemId: value(form, "issueItemId"), returned: value(form, "returned") || "0", damaged: value(form, "damaged") || "0", lost: value(form, "lost") || "0", notes: value(form, "notes") }, admin.id); }
   catch (error) { redirect(`/inventory/issues?error=${encodeURIComponent(errorMessage(error))}`); }
-  updateTag(CACHE_TAGS.inventory); updateTag(CACHE_TAGS.issues); redirect("/inventory/issues?success=Issue+closed");
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.inventory); updateTag(CACHE_TAGS.issues); redirect("/inventory/issues?success=Inventory+issue+closed+successfully");
 }
 
 export async function updateSettingsAction(form: FormData) {
