@@ -35,7 +35,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </span>
         <h2>Welcome back</h2>
         <p>Sign in with your staff username to continue.</p>
-        {query.expired && <div className="alert alert-error">Your five-minute session expired. Please sign in again.</div>}
+        {/* {query.expired && <div className="alert alert-error">Your five-minute session expired. Please sign in again.</div>} */}
         {query.passwordChanged && <div className="alert alert-success">Password changed successfully. Sign in with your new password.</div>}
         <LoginForm />
       </div>

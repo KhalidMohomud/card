@@ -11,12 +11,23 @@ export function LoginForm() {
     const password = String(form.get("password") ?? "");
     if (password.length > 128) { setError("Enter your account password, not the ADMIN_PASSWORD_HASH value."); setPending(false); return; }
     try {
-      const response = await fetch("/api/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: form.get("username"), password }) });
+      const response = await fetch("/api/login",
+        {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ username: form.get("username"), password })
+        });
       const body = await response.json();
       if (!response.ok) { setError(body.message ?? "Sign in failed."); return; }
       window.location.replace(body.user?.role === "SUPERVISOR" ? "/pos" : "/dashboard");
-    } catch { setError("Unable to reach the server. Check your connection."); }
-    finally { setPending(false); }
+    }
+    catch {
+      setError("Unable to reach the server. Check your connection.");
+
+    }
+    finally {
+      setPending(false);
+
+    }
   }
   return <form onSubmit={submit}>
     {error && <div className="alert alert-error" role="alert">{error}

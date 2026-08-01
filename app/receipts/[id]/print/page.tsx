@@ -25,7 +25,12 @@ export default async function ReceiptPrintPage({ params, searchParams }: { param
     `.then((rows) => rows[0] ?? null),
     getCatalogData(),
   ]);
-  const receipt = receiptRow ? { ...receiptRow, paymentMethod: { name: receiptRow.paymentMethodName }, createdByUser: { fullName: receiptRow.supervisorName } } : null;
+  const receipt = receiptRow ?
+    {
+      ...receiptRow, paymentMethod:
+        { name: receiptRow.paymentMethodName },
+      createdByUser: { fullName: receiptRow.supervisorName }
+    } : null;
   if (!receipt || (user.role === "SUPERVISOR" && receipt.createdByUserId !== user.id)) notFound();
   const business = catalog.settings ?? { businessName: "SwiftWash", phone: "", email: "", address: "", currencyCode: "USD", receiptFooter: "Thank You", logoUrl: null };
   return <main className="receipt-screen">

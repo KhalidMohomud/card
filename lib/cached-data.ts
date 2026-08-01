@@ -2,7 +2,7 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { startOfMonth, startOfToday } from "@/lib/dates";
+import { businessDateEnd, businessDateStart, getBusinessPeriods } from "@/lib/dates";
 import { stockSnapshot } from "@/modules/inventory/stock";
 
 export const CACHE_TAGS = {
@@ -88,7 +88,7 @@ const getReceiptLedgerForQuery = unstable_cache(async (statusValue: string, from
   const matchingStatuses = (["COMPLETED", "CANCELLED"] as const).filter((value) => value.toLowerCase().includes(search.toLowerCase()));
   const where: Prisma.ReceiptWhereInput = {
     ...(status ? { status } : {}),
-    ...(fromValue || toValue ? { issuedAt: { gte: fromValue ? new Date(`${fromValue}T00:00:00`) : undefined, lte: toValue ? new Date(`${toValue}T23:59:59.999`) : undefined } } : {}),
+    ...(fromValue || toValue ? { issuedAt: { gte: fromValue ? businessDateStart(fromValue) : undefined, lte: toValue ? businessDateEnd(toValue) : undefined } } : {}),
     ...(search ? { OR: [
       ...(receiptId && Number.isSafeInteger(receiptId) ? [{ id: receiptId }] : []),
       { serviceNameSnapshot: { contains: search, mode: "insensitive" as const } },
@@ -228,45 +228,49 @@ export const getCachedStockSnapshot = unstable_cache(async () => {
   }));
 }, ["swiftwash-stock-v1"], { tags: [CACHE_TAGS.inventory], revalidate: 5 * 60 });
 
-const getDashboardSnapshotForPeriod = unstable_cache(async (todayIso: string, monthIso: string) => {
-  const today = new Date(todayIso); const month = new Date(monthIso);
+const getDashboardSnapshotForPeriod = unstable_cache(async (todayIso: string, tomorrowIso: string, monthIso: string, nextMonthIso: string, todayLabel: string, monthLabel: string, monthRangeLabel: string, timeZone: string) => {
+  const today = new Date(todayIso); const tomorrow = new Date(tomorrowIso); const month = new Date(monthIso); const nextMonth = new Date(nextMonthIso);
+  const todayRange = { gte: today, lt: tomorrow };
+  const monthRange = { gte: month, lt: nextMonth };
   const [todaySales, monthSales, recent, catalog, todayExpenses, monthExpenses, monthPurchases, stock, byPayment, byService, bySupervisor, movements, users] = await Promise.all([
-    prisma.receipt.aggregate({ where: { status: "COMPLETED", issuedAt: { gte: today } }, _count: true, _sum: { servicePriceSnapshot: true } }),
-    prisma.receipt.aggregate({ where: { status: "COMPLETED", issuedAt: { gte: month } }, _count: true, _sum: { servicePriceSnapshot: true } }),
-    prisma.receipt.findMany({ select: { id: true, serviceNameSnapshot: true, servicePriceSnapshot: true, issuedAt: true, createdByUser: { select: { fullName: true } } }, orderBy: { id: "desc" }, take: 7 }),
+    prisma.receipt.aggregate({ where: { status: "COMPLETED", issuedAt: todayRange }, _count: true, _sum: { servicePriceSnapshot: true } }),
+    prisma.receipt.aggregate({ where: { status: "COMPLETED", issuedAt: monthRange }, _count: true, _sum: { servicePriceSnapshot: true } }),
+    prisma.receipt.findMany({ select: { id: true, status: true, serviceNameSnapshot: true, servicePriceSnapshot: true, issuedAt: true, createdByUser: { select: { fullName: true } } }, orderBy: [{ issuedAt: "desc" }, { id: "desc" }], take: 7 }),
     getCatalogData(),
-    prisma.expense.aggregate({ where: { status: "ACTIVE", expenseDate: { gte: today } }, _sum: { amount: true } }),
-    prisma.expense.aggregate({ where: { status: "ACTIVE", expenseDate: { gte: month } }, _sum: { amount: true } }),
-    prisma.purchaseItem.findMany({ where: { purchase: { status: "RECEIVED", purchaseDate: { gte: month } } }, select: { quantity: true, unitCost: true } }),
+    prisma.expense.aggregate({ where: { status: "ACTIVE", expenseDate: todayRange }, _count: true, _sum: { amount: true } }),
+    prisma.expense.aggregate({ where: { status: "ACTIVE", expenseDate: monthRange }, _count: true, _sum: { amount: true } }),
+    prisma.purchase.findMany({ where: { status: "RECEIVED", purchaseDate: monthRange }, select: { items: { select: { quantity: true, unitCost: true } } } }),
     getCachedStockSnapshot(),
-    prisma.receipt.groupBy({ by: ["paymentMethodId"], where: { status: "COMPLETED", issuedAt: { gte: today } }, _count: true, _sum: { servicePriceSnapshot: true } }),
-    prisma.receipt.groupBy({ by: ["serviceNameSnapshot"], where: { status: "COMPLETED", issuedAt: { gte: today } }, _count: true, _sum: { servicePriceSnapshot: true } }),
-    prisma.receipt.groupBy({ by: ["createdByUserId"], where: { status: "COMPLETED", issuedAt: { gte: today } }, _count: true, _sum: { servicePriceSnapshot: true } }),
+    prisma.receipt.groupBy({ by: ["paymentMethodId"], where: { status: "COMPLETED", issuedAt: todayRange }, _count: true, _sum: { servicePriceSnapshot: true } }),
+    prisma.receipt.groupBy({ by: ["serviceNameSnapshot"], where: { status: "COMPLETED", issuedAt: todayRange }, _count: true, _sum: { servicePriceSnapshot: true } }),
+    prisma.receipt.groupBy({ by: ["createdByUserId"], where: { status: "COMPLETED", issuedAt: todayRange }, _count: true, _sum: { servicePriceSnapshot: true } }),
     prisma.inventoryMovement.findMany({ select: { id: true, movementType: true, quantity: true, inventoryItem: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 6 }),
     prisma.user.findMany({ select: { id: true, fullName: true } }),
   ]);
   const zero = new Prisma.Decimal(0);
   const methodNames = new Map(catalog.methods.map((row) => [row.id, row.name]));
   const userNames = new Map(users.map((row) => [row.id, row.fullName]));
-  const purchaseTotal = monthPurchases.reduce((total, row) => total.add(row.quantity.mul(row.unitCost)), zero);
+  const purchaseTotal = monthPurchases.reduce((total, purchase) => purchase.items.reduce((purchaseSum, row) => purchaseSum.add(row.quantity.mul(row.unitCost)), total), zero);
   return {
     currency: catalog.settings?.currencyCode ?? "USD",
+    period: { todayLabel, monthLabel, monthRangeLabel, timeZone },
     todaySales: { count: todaySales._count, total: (todaySales._sum.servicePriceSnapshot ?? zero).toFixed(2) },
     monthSales: { count: monthSales._count, total: (monthSales._sum.servicePriceSnapshot ?? zero).toFixed(2) },
-    todayExpenses: (todayExpenses._sum.amount ?? zero).toFixed(2),
-    monthExpenses: (monthExpenses._sum.amount ?? zero).toFixed(2),
-    monthPurchases: purchaseTotal.toFixed(2),
-    recent: recent.map((row) => ({ id: row.id, service: row.serviceNameSnapshot, total: row.servicePriceSnapshot.toFixed(2), issuedAt: row.issuedAt.toISOString(), supervisor: row.createdByUser.fullName })),
+    todayExpenses: { count: todayExpenses._count, total: (todayExpenses._sum.amount ?? zero).toFixed(2) },
+    monthExpenses: { count: monthExpenses._count, total: (monthExpenses._sum.amount ?? zero).toFixed(2) },
+    monthPurchases: { count: monthPurchases.length, total: purchaseTotal.toFixed(2) },
+    recent: recent.map((row) => ({ id: row.id, status: row.status, service: row.serviceNameSnapshot, total: row.servicePriceSnapshot.toFixed(2), issuedAt: row.issuedAt.toISOString(), supervisor: row.createdByUser.fullName })),
     stock,
     byPayment: byPayment.map((row) => ({ name: methodNames.get(row.paymentMethodId) ?? "Unknown", count: row._count, total: (row._sum.servicePriceSnapshot ?? zero).toFixed(2) })),
     byService: byService.map((row) => ({ name: row.serviceNameSnapshot, count: row._count, total: (row._sum.servicePriceSnapshot ?? zero).toFixed(2) })),
     bySupervisor: bySupervisor.map((row) => ({ name: userNames.get(row.createdByUserId) ?? "Unknown", count: row._count, total: (row._sum.servicePriceSnapshot ?? zero).toFixed(2) })),
     movements: movements.map((row) => ({ id: row.id, item: row.inventoryItem.name, type: row.movementType, quantity: row.quantity.toString() })),
   };
-}, ["swiftwash-dashboard-v1"], { tags: [CACHE_TAGS.dashboard, CACHE_TAGS.catalog, CACHE_TAGS.inventory], revalidate: 5 * 60 });
+}, ["swiftwash-dashboard-v2"], { tags: [CACHE_TAGS.dashboard, CACHE_TAGS.catalog, CACHE_TAGS.inventory], revalidate: 5 * 60 });
 
 export function getDashboardSnapshot() {
-  return getDashboardSnapshotForPeriod(startOfToday().toISOString(), startOfMonth().toISOString());
+  const periods = getBusinessPeriods();
+  return getDashboardSnapshotForPeriod(periods.todayStart.toISOString(), periods.tomorrowStart.toISOString(), periods.monthStart.toISOString(), periods.nextMonthStart.toISOString(), periods.todayLabel, periods.monthLabel, periods.monthRangeLabel, periods.timeZone);
 }
 
 const getReportSnapshotForRange = unstable_cache(async (startIso: string, endIso: string, supervisorId: string) => {
@@ -280,7 +284,7 @@ const getReportSnapshotForRange = unstable_cache(async (startIso: string, endIso
   const [receipts, expenses, purchaseSummary, movements, issueCount, stock, catalog, salesSummary, expenseSummary, serviceGroups, supervisorGroups, paymentGroups, users] = await Promise.all([
     prisma.receipt.findMany({ where: receiptWhere, select: { id: true, issuedAt: true, serviceNameSnapshot: true, servicePriceSnapshot: true, status: true, createdByUser: { select: { fullName: true } } }, orderBy: { issuedAt: "desc" }, take: 25 }),
     prisma.expense.findMany({ where: expenseWhere, select: { id: true, expenseDate: true, type: true, title: true, amount: true, status: true }, orderBy: { expenseDate: "desc" }, take: 25 }),
-    selectedId ? Promise.resolve({ count: 0, total: "0.00" }) : getPurchaseSummary(start, end),
+    selectedId ? Promise.resolve({ count: 0, lineCount: 0, total: "0.00", paidTotal: "0.00", unpaidTotal: "0.00" }) : getPurchaseSummary(start, end),
     prisma.inventoryMovement.findMany({ where: movementWhere, select: { id: true, createdAt: true, movementType: true, quantity: true, inventoryItem: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 25 }),
     prisma.inventoryIssue.count({ where: issueWhere }),
     getCachedStockSnapshot(),
@@ -295,7 +299,7 @@ const getReportSnapshotForRange = unstable_cache(async (startIso: string, endIso
   const zero = new Prisma.Decimal(0);
   const sales = salesSummary._sum.servicePriceSnapshot ?? zero;
   const expenseTotal = expenseSummary._sum.amount ?? zero;
-  const purchaseTotal = new Prisma.Decimal(purchaseSummary.total);
+  const paidPurchaseTotal = new Prisma.Decimal(purchaseSummary.paidTotal);
   const userNames = new Map(users.map((row) => [row.id, row.fullName]));
   const methodNames = new Map(catalog.methods.map((row) => [row.id, row.name]));
   return {
@@ -303,7 +307,7 @@ const getReportSnapshotForRange = unstable_cache(async (startIso: string, endIso
     sales: { count: salesSummary._count, total: sales.toFixed(2) },
     expenses: { count: expenseSummary._count, total: expenseTotal.toFixed(2) },
     purchases: purchaseSummary,
-    cash: sales.sub(expenseTotal).sub(purchaseTotal).toFixed(2),
+    cash: sales.sub(expenseTotal).sub(paidPurchaseTotal).toFixed(2),
     receipts: receipts.map((row) => ({ id: row.id, issuedAt: row.issuedAt.toISOString(), service: row.serviceNameSnapshot, supervisor: row.createdByUser.fullName, total: row.servicePriceSnapshot.toFixed(2), status: row.status })),
     expenseRows: expenses.map((row) => ({ id: row.id, expenseDate: row.expenseDate.toISOString(), type: row.type, title: row.title, amount: row.amount.toFixed(2), status: row.status })),
     movements: movements.map((row) => ({ id: row.id, createdAt: row.createdAt.toISOString(), item: row.inventoryItem.name, type: row.movementType, quantity: row.quantity.toString() })),
@@ -316,15 +320,27 @@ const getReportSnapshotForRange = unstable_cache(async (startIso: string, endIso
 }, ["swiftwash-report-v1"], { tags: [CACHE_TAGS.reports, CACHE_TAGS.catalog, CACHE_TAGS.inventory], revalidate: 5 * 60 });
 
 async function getPurchaseSummary(start: Date, end: Date) {
-  const rows = await prisma.$queryRaw<{ count: bigint; total: Prisma.Decimal | null }[]>`
-    SELECT COUNT(*)::bigint AS count, COALESCE(SUM(pi.quantity * pi."unitCost"), 0) AS total
+  const rows = await prisma.$queryRaw<{ count: bigint; line_count: bigint; total: Prisma.Decimal | null; paid_total: Prisma.Decimal | null; unpaid_total: Prisma.Decimal | null }[]>`
+    SELECT
+      COUNT(DISTINCT p.id)::bigint AS count,
+      COUNT(pi.id)::bigint AS line_count,
+      COALESCE(SUM(pi.quantity * pi."unitCost"), 0) AS total,
+      COALESCE(SUM(CASE WHEN p."paymentStatus" = 'PAID'::"FinancialStatus" THEN pi.quantity * pi."unitCost" ELSE 0 END), 0) AS paid_total,
+      COALESCE(SUM(CASE WHEN p."paymentStatus" = 'UNPAID'::"FinancialStatus" THEN pi.quantity * pi."unitCost" ELSE 0 END), 0) AS unpaid_total
     FROM "PurchaseItem" pi
     INNER JOIN "Purchase" p ON p.id = pi."purchaseId"
     WHERE p.status = 'RECEIVED'::"PurchaseStatus"
       AND p."purchaseDate" >= ${start}
       AND p."purchaseDate" <= ${end}
   `;
-  return { count: Number(rows[0]?.count ?? 0), total: (rows[0]?.total ?? new Prisma.Decimal(0)).toFixed(2) };
+  const zero = new Prisma.Decimal(0);
+  return {
+    count: Number(rows[0]?.count ?? 0),
+    lineCount: Number(rows[0]?.line_count ?? 0),
+    total: (rows[0]?.total ?? zero).toFixed(2),
+    paidTotal: (rows[0]?.paid_total ?? zero).toFixed(2),
+    unpaidTotal: (rows[0]?.unpaid_total ?? zero).toFixed(2),
+  };
 }
 
 export function getReportSnapshot(start: Date, end: Date, supervisorId?: string) {
