@@ -10,7 +10,7 @@ export function actionError(error: unknown): ActionState {
   if (error instanceof Error && error.message === "FORBIDDEN") {
     return { ok: false, message: "You do not have permission to perform this action." };
   }
-  console.error(error);
+  console.error("Server action failed", { error: error instanceof Error ? error.name : "UnknownError" });
   return { ok: false, message: "The request could not be completed. Please try again." };
 }
 

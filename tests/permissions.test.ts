@@ -18,4 +18,12 @@ describe("role permissions", () => {
     expect(can("ADMIN", "settings:manage")).toBe(true);
     expect(can("ADMIN", "audit:view")).toBe(true);
   });
+
+  it("limits supervisors to POS receipt creation and their permitted reprints", () => {
+    expect(can("SUPERVISOR", "receipt:create")).toBe(true);
+    expect(can("SUPERVISOR", "receipt:reprint")).toBe(true);
+    for (const permission of ["receipt:view-all", "receipt:cancel", "service:manage", "user:manage", "expense:manage", "inventory:manage", "report:view", "settings:manage", "audit:view"] as const) {
+      expect(can("SUPERVISOR", permission)).toBe(false);
+    }
+  });
 });

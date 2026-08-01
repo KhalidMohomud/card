@@ -1,7 +1,7 @@
 import "server-only";
 import { Prisma, type UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { assertPermission } from "@/lib/permissions";
+import { assertPermission, canAccessReceipt } from "@/lib/permissions";
 import { receiptInput } from "@/lib/validation";
 import { receiptSnapshot } from "@/modules/business-rules";
 
@@ -42,10 +42,12 @@ export async function cancelReceipt(id: number, reason: string, user: { id: stri
   return prisma.$transaction(async (tx) => {
     const current = await tx.receipt.findUnique({ where: { id } });
     if (!current || current.status === "CANCELLED") throw new Error("RECEIPT_NOT_CANCELLABLE");
-    const updated = await tx.receipt.update({
-      where: { id },
+    const changed = await tx.receipt.updateMany({
+      where: { id, status: "COMPLETED" },
       data: { status: "CANCELLED", cancellationReason: reason, cancelledAt: new Date(), cancelledByUserId: user.id },
     });
+    if (changed.count !== 1) throw new Error("RECEIPT_NOT_CANCELLABLE");
+    const updated = await tx.receipt.findUniqueOrThrow({ where: { id } });
     await tx.auditLog.create({
       data: { userId: user.id, action: "RECEIPT_CANCELLED", entityType: "Receipt", entityId: String(id), oldValues: { status: current.status }, newValues: { status: updated.status, reason } },
     });
@@ -58,7 +60,7 @@ export async function recordReprint(id: number, user: { id: string; role: UserRo
   return prisma.$transaction(async (tx) => {
     const receipt = await tx.receipt.findUnique({ where: { id } });
     if (!receipt) throw new Error("RECEIPT_NOT_FOUND");
-    if (user.role === "SUPERVISOR" && receipt.createdByUserId !== user.id) throw new Error("FORBIDDEN");
+    if (!canAccessReceipt(user.role, user.id, receipt.createdByUserId)) throw new Error("FORBIDDEN");
     const updated = await tx.receipt.update({ where: { id }, data: { printCount: { increment: 1 } } });
     await tx.receiptReprint.create({ data: { receiptId: id, userId: user.id } });
     await tx.auditLog.create({ data: { userId: user.id, action: "RECEIPT_REPRINTED", entityType: "Receipt", entityId: String(id), newValues: { printCount: updated.printCount } } });

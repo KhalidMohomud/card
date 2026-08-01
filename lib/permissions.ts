@@ -34,3 +34,7 @@ export function can(role: UserRole, permission: Permission) {
 export function assertPermission(role: UserRole, permission: Permission) {
   if (!can(role, permission)) throw new Error("FORBIDDEN");
 }
+
+export function canAccessReceipt(role: UserRole, userId: string, receiptOwnerId: string) {
+  return role !== "SUPERVISOR" || userId === receiptOwnerId;
+}

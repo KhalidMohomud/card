@@ -8,6 +8,7 @@ import { formatDateTime } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
+import { canAccessReceipt } from "@/lib/permissions";
 
 export default async function ReceiptPrintPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ autoprint?: string }> }) {
   const user = await requireUser(); const { id } = await params; const query = await searchParams; const receiptId = Number(id);
@@ -31,7 +32,7 @@ export default async function ReceiptPrintPage({ params, searchParams }: { param
         { name: receiptRow.paymentMethodName },
       createdByUser: { fullName: receiptRow.supervisorName }
     } : null;
-  if (!receipt || (user.role === "SUPERVISOR" && receipt.createdByUserId !== user.id)) notFound();
+  if (!receipt || !canAccessReceipt(user.role, user.id, receipt.createdByUserId)) notFound();
   const business = catalog.settings ?? { businessName: "SwiftWash", phone: "", email: "", address: "", currencyCode: "USD", receiptFooter: "Thank You", logoUrl: null };
   return <main className="receipt-screen">
     <div className="print-actions no-print"><Link className="btn btn-ghost" href={user.role === "SUPERVISOR" ? "/pos" : "/receipts"}><ArrowLeft size={17} /> {user.role === "SUPERVISOR" ? "Back to POS" : "Receipts"}</Link><PrintButton autoPrint={query.autoprint === "1"} /></div>

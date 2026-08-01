@@ -83,7 +83,67 @@ export default async function DashboardPage() {
   </div>;
 }
 
-function Stat({ label, value, note, icon }: { label: string; value: string; note: string; icon: React.ReactNode }) { return <div className="card stat"><div className="stat-top"><span>{label}</span><span className="stat-icon">{icon}</span></div><div className="stat-value">{value}</div><div className="stat-note">{note}</div></div>; }
-type RecentReceipt = { id: number; status: "COMPLETED" | "CANCELLED"; service: string; supervisor: string; issuedAt: string; total: string };
-function Recent({ receipts, currency }: { receipts: RecentReceipt[]; currency: string }) { return <div className="card"><div className="card-head"><div><h2>Latest receipts</h2><span className="muted card-subtitle">Newest records across all dates</span></div><div className="actions"><span className="badge">All dates</span><Link className="btn btn-ghost" href="/receipts">View all</Link></div></div>{!receipts.length ? <Empty message="No receipts have been created yet." /> : <div className="table-wrap"><table><thead><tr><th>Receipt</th><th>Service</th><th>Supervisor</th><th>Time</th><th>Status</th><th>Total</th></tr></thead><tbody>{receipts.map((receipt) => <tr key={receipt.id}><td>#{String(receipt.id).padStart(6, "0")}</td><td>{receipt.service}</td><td>{receipt.supervisor}</td><td>{formatDateTime(receipt.issuedAt)}</td><td><span className={`badge ${receipt.status === "COMPLETED" ? "success" : "danger"}`}>{receipt.status}</span></td><td className="amount">{formatMoney(receipt.total, currency)}</td></tr>)}</tbody></table></div>}</div>; }
-function Breakdown({ title, rows }: { title: string; rows: [string, number, string][] }) { return <div><h3 style={{ fontSize: 13 }}>{title}</h3>{rows.length ? rows.map(([name, count, amount]) => <div className="checkout-row" key={name}><span>{name}<small className="muted" style={{ display: "block" }}>{count} receipts</small></span><strong>{amount}</strong></div>) : <p className="muted">No sales yet.</p>}</div>; }
+function Stat({ label, value, note, icon }: { label: string; value: string; note: string; icon: React.ReactNode }) {
+  return <div className="card stat">
+    <div className="stat-top">
+      <span>{label}</span>
+      <span className="stat-icon">{icon}</span>
+    </div>
+    <div className="stat-value">{value}
+    </div>
+    <div className="stat-note">{note}
+    </div>
+  </div>;
+}
+type RecentReceipt = {
+  id: number; status: "COMPLETED" | "CANCELLED";
+  service: string; supervisor: string; issuedAt: string; total: string
+};
+function Recent({ receipts, currency }: { receipts: RecentReceipt[]; currency: string }) {
+  return <div className="card">
+    <div className="card-head">
+      <div>
+        <h2>Latest receipts</h2>
+        <span className="muted card-subtitle">Newest records across all dates</span>
+      </div>
+      <div className="actions">
+        <span className="badge">All dates</span>
+        <Link className="btn btn-ghost" href="/receipts">View all</Link>
+      </div>
+    </div>{!receipts.length ? <Empty message="No receipts have been created yet." /> : <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Receipt</th>
+            <th>Service</th>
+            <th>Supervisor</th>
+            <th>Time</th>
+            <th>Status</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>{receipts.map((receipt) => <tr key={receipt.id}>
+          <td>#{String(receipt.id).padStart(6, "0")}</td>
+          <td>{receipt.service}</td>
+          <td>{receipt.supervisor}</td>
+          <td>{formatDateTime(receipt.issuedAt)}</td>
+          <td>
+            <span className={`badge ${receipt.status === "COMPLETED" ? "success" : "danger"}`}>{receipt.status}</span>
+          </td>
+          <td className="amount">{formatMoney(receipt.total, currency)}</td>
+        </tr>)}
+        </tbody>
+      </table>
+    </div>}
+  </div>;
+}
+function Breakdown({ title, rows }: { title: string; rows: [string, number, string][] }) {
+  return <div>
+    <h3 style={{ fontSize: 13 }}>{title}</h3>
+    {rows.length ? rows.map(([name, count, amount]) =>
+      <div className="checkout-row" key={name}>
+        <span>{name}<small className="muted" style={{ display: "block" }}>{count} receipts</small>
+        </span><strong>{amount}</strong>
+      </div>) : <p className="muted">No sales yet.</p>}
+  </div>;
+}

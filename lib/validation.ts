@@ -2,15 +2,56 @@ import { z } from "zod";
 
 const requiredText = z.string().trim().min(1).max(120);
 const optionalText = z.string().trim().max(500).optional().transform((v) => v || undefined);
-const money = z.string().regex(/^\d+(\.\d{1,2})?$/, "Use a valid amount with up to 2 decimals");
-const quantity = z.string().regex(/^\d+(\.\d{1,3})?$/, "Use a positive quantity with up to 3 decimals").refine((value) => Number(value) > 0, "Quantity must be greater than zero");
-const nonnegativeQuantity = z.string().regex(/^\d+(\.\d{1,3})?$/, "Use a quantity with up to 3 decimals");
+const optionalShortText = z.string().trim().max(120).optional().transform((v) => v || undefined);
+const MAX_MONEY = 9_999_999_999.99;
+const MAX_QUANTITY = 999_999_999.999;
+const money = z.string()
+  .regex(/^\d+(\.\d{1,2})?$/, "Use a valid amount with up to 2 decimals")
+  .refine((value) => Number(value) > 0, "Amount must be greater than zero")
+  .refine((value) => Number(value) <= MAX_MONEY, "Amount is too large");
+const quantity = z.string()
+  .regex(/^\d+(\.\d{1,3})?$/, "Use a positive quantity with up to 3 decimals")
+  .refine((value) => Number(value) > 0, "Quantity must be greater than zero")
+  .refine((value) => Number(value) <= MAX_QUANTITY, "Quantity is too large");
+const nonnegativeQuantity = z.string()
+  .regex(/^\d+(\.\d{1,3})?$/, "Use a quantity with up to 3 decimals")
+  .refine((value) => Number(value) <= MAX_QUANTITY, "Quantity is too large");
 const strongPassword = z.string().min(12).max(128).regex(/[a-z]/, "Add a lowercase letter").regex(/[A-Z]/, "Add an uppercase letter").regex(/\d/, "Add a number").regex(/[^a-zA-Z0-9]/, "Add a symbol");
+const calendarDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}, "Use a valid calendar date");
+const optionalCalendarDate = z.union([calendarDate, z.literal("")]).optional().transform((value) => value || undefined);
+function validateDateOrder(value: { from?: string; to?: string }, context: z.RefinementCtx) {
+  if (value.from && value.to && value.from > value.to) context.addIssue({ code: "custom", path: ["to"], message: "End date must not be before start date" });
+}
+
+export const cuidInput = z.string().cuid();
+export const positiveIntegerInput = z.coerce.number().int().positive().max(2_147_483_647);
+export const booleanInput = z.union([z.boolean(), z.enum(["true", "false"]).transform((value) => value === "true")]);
+export const loginInput = z.object({
+  username: z.string().trim().transform((value) => value.replace(/^@+/, "").toLowerCase()).pipe(z.string().min(3).max(30).regex(/^[a-z0-9_.]+$/)),
+  password: z.string().min(1).max(128),
+}).strict();
+export const receiptFilterInput = z.object({
+  q: z.string().trim().max(120).optional().default(""),
+  status: z.union([z.enum(["COMPLETED", "CANCELLED"]), z.literal("")]).optional().transform((value) => value || undefined),
+  page: z.coerce.number().int().min(1).max(10_000).optional().default(1),
+  from: optionalCalendarDate,
+  to: optionalCalendarDate,
+}).superRefine(validateDateOrder);
+export const reportFilterInput = z.object({
+  type: z.enum(["sales", "expenses", "purchases", "stock"]).optional().default("sales"),
+  supervisorId: z.union([z.string().cuid(), z.literal("")]).optional().transform((value) => value || undefined),
+  from: optionalCalendarDate,
+  to: optionalCalendarDate,
+}).superRefine(validateDateOrder);
 
 export const receiptInput = z.object({
   serviceId: z.string().cuid(),
   paymentMethodId: z.string().cuid(),
-  paymentReference: optionalText,
+  paymentReference: optionalShortText,
   idempotencyKey: z.string().uuid(),
 });
 
@@ -41,7 +82,7 @@ export const expenseInput = z.object({
   paymentMethodId: z.string().optional().transform((v) => v || undefined),
   paymentStatus: z.enum(["UNPAID", "PAID"]),
   amount: money.optional(),
-  carCount: z.coerce.number().int().positive().optional(),
+  carCount: z.coerce.number().int().positive().max(1_000_000).optional(),
   ratePerCar: money.optional(),
   periodStart: z.coerce.date().optional(),
   periodEnd: z.coerce.date().optional(),
@@ -70,7 +111,7 @@ export const supplierUpdateInput = supplierInput.extend({
 });
 export const purchaseInput = z.object({
   supplierId: z.string().cuid(), paymentMethodId: z.string().optional().transform((v) => v || undefined),
-  supplierInvoiceNumber: optionalText, purchaseDate: z.coerce.date(), paymentStatus: z.enum(["UNPAID", "PAID"]),
+  supplierInvoiceNumber: optionalShortText, purchaseDate: z.coerce.date(), paymentStatus: z.enum(["UNPAID", "PAID"]),
   inventoryItemId: z.string().cuid(), quantity, unitCost: money, notes: optionalText,
 });
 export const issueInput = z.object({
@@ -83,5 +124,5 @@ export const adjustmentInput = z.object({ inventoryItemId: z.string().cuid(), di
 export const settingsInput = z.object({
   businessName: requiredText, phone: z.string().trim().max(40), email: z.string().email().or(z.literal("")),
   address: z.string().trim().max(240), currencyCode: z.string().trim().length(3).toUpperCase(), receiptFooter: requiredText,
-  logoUrl: z.string().url().optional().or(z.literal("")),
+  logoUrl: z.string().url().refine((value) => ["http:", "https:"].includes(new URL(value).protocol), "Use an HTTP or HTTPS URL").optional().or(z.literal("")),
 });

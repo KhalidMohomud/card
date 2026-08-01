@@ -54,4 +54,4 @@ async function main() {
   await prisma.auditLog.create({ data: { userId: admin.id, action: "SEED_COMPLETED", entityType: "System", newValues: { services: 2, paymentMethods: 5 } } });
 }
 
-main().catch((error) => { console.error(error); process.exit(1); }).finally(async () => prisma.$disconnect());
+main().catch((error) => { console.error("Database seed failed", { error: error instanceof Error ? error.name : "UnknownError" }); process.exit(1); }).finally(async () => prisma.$disconnect());

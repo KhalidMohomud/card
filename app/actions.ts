@@ -8,7 +8,7 @@ import { CACHE_TAGS } from "@/lib/cached-data";
 import { businessDateStart } from "@/lib/dates";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, requireManagement, requireUser } from "@/lib/session";
-import { cancellationInput, passwordChangeInput, paymentMethodInput, serviceInput, serviceUpdateInput, settingsInput, supervisorInput, supervisorUpdateInput } from "@/lib/validation";
+import { booleanInput, cancellationInput, cuidInput, passwordChangeInput, paymentMethodInput, positiveIntegerInput, serviceInput, serviceUpdateInput, settingsInput, supervisorInput, supervisorUpdateInput } from "@/lib/validation";
 import { SESSION_COOKIE_NAME } from "@/lib/auth-session";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { cancelReceipt, recordReprint } from "@/modules/receipts/service";
@@ -91,7 +91,13 @@ export async function createPaymentMethodAction(form: FormData) {
 }
 
 export async function togglePaymentMethodAction(form: FormData) {
-  await requireManagement(); await prisma.paymentMethod.update({ where: { id: value(form, "id") }, data: { isActive: value(form, "isActive") === "true" } });
+  const operator = await requireManagement();
+  const id = cuidInput.parse(value(form, "id"));
+  const isActive = booleanInput.parse(value(form, "isActive"));
+  await prisma.$transaction([
+    prisma.paymentMethod.update({ where: { id }, data: { isActive } }),
+    prisma.auditLog.create({ data: { userId: operator.id, action: isActive ? "PAYMENT_METHOD_ENABLED" : "PAYMENT_METHOD_DISABLED", entityType: "PaymentMethod", entityId: id } }),
+  ]);
   updateTag(CACHE_TAGS.catalog); refresh();
 }
 
@@ -126,7 +132,7 @@ export async function createSupervisorAction(form: FormData) {
 }
 
 export async function toggleSupervisorAction(form: FormData) {
-  const operator = await requireManagement(); const id = value(form, "id"); const isActive = value(form, "isActive") === "true";
+  const operator = await requireManagement(); const id = cuidInput.parse(value(form, "id")); const isActive = booleanInput.parse(value(form, "isActive"));
   const staff = await prisma.user.findFirst({ where: { id, role: { in: ["SUPERVISOR", "MANAGER"] } }, select: { id: true, role: true } });
   if (!staff) redirect("/supervisors?error=Staff+account+not+found");
   if (!canManageStaffAccount(operator.role, staff.role)) redirect("/supervisors?error=Only+an+administrator+can+manage+manager+accounts");
@@ -157,7 +163,7 @@ export async function updateSupervisorAction(form: FormData) {
 }
 
 export async function deleteSupervisorAction(form: FormData) {
-  const operator = await requireManagement(); const id = value(form, "id");
+  const operator = await requireManagement(); const id = cuidInput.parse(value(form, "id"));
   const current = await prisma.user.findFirst({
     where: { id, role: { in: ["SUPERVISOR", "MANAGER"] } },
     select: {
@@ -187,7 +193,7 @@ export async function cancelReceiptAction(form: FormData) {
 }
 
 export async function reprintReceiptAction(form: FormData) {
-  const user = await requireUser(); const id = Number(value(form, "id")); await recordReprint(id, user); redirect(`/receipts/${id}/print?autoprint=1`);
+  const user = await requireUser(); const id = positiveIntegerInput.parse(value(form, "id")); await recordReprint(id, user); redirect(`/receipts/${id}/print?autoprint=1`);
 }
 
 export async function createExpenseAction(form: FormData) {
@@ -200,21 +206,21 @@ export async function createExpenseAction(form: FormData) {
 
 export async function updateExpenseAction(form: FormData) {
   const admin = await requireManagement();
-  try { await updateExpense(value(form, "id"), expenseFormData(form), admin.id); }
+  try { await updateExpense(cuidInput.parse(value(form, "id")), expenseFormData(form), admin.id); }
   catch (error) { redirect(`/expenses?error=${encodeURIComponent(errorMessage(error))}`); }
   updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.dashboard); updateTag(CACHE_TAGS.expenses); updateTag(CACHE_TAGS.reports); redirect("/expenses?success=Expense+updated+successfully");
 }
 
 export async function deleteExpenseAction(form: FormData) {
   const admin = await requireManagement();
-  try { await deleteExpense(value(form, "id"), admin.id); }
+  try { await deleteExpense(cuidInput.parse(value(form, "id")), admin.id); }
   catch (error) { redirect(`/expenses?error=${encodeURIComponent(errorMessage(error))}`); }
   updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.dashboard); updateTag(CACHE_TAGS.expenses); updateTag(CACHE_TAGS.reports); redirect("/expenses?success=Expense+deleted+successfully");
 }
 
 export async function cancelExpenseAction(form: FormData) {
   const admin = await requireManagement();
-  try { await cancelExpense(value(form, "id"), value(form, "reason"), admin.id); } catch { redirect("/expenses?error=Expense+could+not+be+cancelled"); }
+  try { await cancelExpense(cuidInput.parse(value(form, "id")), value(form, "reason"), admin.id); } catch { redirect("/expenses?error=Expense+could+not+be+cancelled"); }
   updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.dashboard); updateTag(CACHE_TAGS.expenses); updateTag(CACHE_TAGS.reports); redirect("/expenses?success=Expense+cancelled");
 }
 
@@ -248,7 +254,7 @@ export async function updateSupplierAction(form: FormData) {
 
 export async function deleteSupplierAction(form: FormData) {
   const admin = await requireManagement();
-  try { await deleteSupplier(value(form, "id"), admin.id); }
+  try { await deleteSupplier(cuidInput.parse(value(form, "id")), admin.id); }
   catch (error) { redirect(`/inventory/suppliers?error=${encodeURIComponent(errorMessage(error))}`); }
   updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.purchases); redirect("/inventory/suppliers?success=Supplier+deleted+successfully");
 }
@@ -262,7 +268,7 @@ export async function updateInventoryCategoryAction(form: FormData) {
 
 export async function deleteInventoryCategoryAction(form: FormData) {
   const admin = await requireManagement();
-  try { await deleteInventoryCategory(value(form, "id"), admin.id); }
+  try { await deleteInventoryCategory(cuidInput.parse(value(form, "id")), admin.id); }
   catch (error) { redirect(`/inventory/categories?error=${encodeURIComponent(errorMessage(error))}`); }
   updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.inventory); redirect("/inventory/categories?success=Category+deleted+successfully");
 }
@@ -276,7 +282,7 @@ export async function updateInventoryItemAction(form: FormData) {
 
 export async function deleteInventoryItemAction(form: FormData) {
   const admin = await requireManagement();
-  try { await deleteInventoryItem(value(form, "id"), admin.id); }
+  try { await deleteInventoryItem(cuidInput.parse(value(form, "id")), admin.id); }
   catch (error) { redirect(`/inventory/items?error=${encodeURIComponent(errorMessage(error))}`); }
   updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.inventory); redirect("/inventory/items?success=Inventory+item+deleted+successfully");
 }
@@ -297,21 +303,21 @@ export async function createPurchaseAction(form: FormData) {
 
 export async function updatePurchaseAction(form: FormData) {
   const admin = await requireManagement();
-  try { await updatePurchase(value(form, "id"), purchaseFormData(form), admin.id); }
+  try { await updatePurchase(cuidInput.parse(value(form, "id")), purchaseFormData(form), admin.id); }
   catch (error) { redirect(`/purchases?error=${encodeURIComponent(errorMessage(error))}`); }
   updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.purchases); redirect("/purchases?success=Draft+purchase+updated+successfully");
 }
 
 export async function deletePurchaseAction(form: FormData) {
   const admin = await requireManagement();
-  try { await deletePurchase(value(form, "id"), admin.id); }
+  try { await deletePurchase(cuidInput.parse(value(form, "id")), admin.id); }
   catch (error) { redirect(`/purchases?error=${encodeURIComponent(errorMessage(error))}`); }
   updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.purchases); redirect("/purchases?success=Draft+purchase+deleted+successfully");
 }
 
 export async function receivePurchaseAction(form: FormData) {
   const admin = await requireManagement();
-  try { await receivePurchase(value(form, "id"), admin.id); } catch (error) { redirect(`/purchases?error=${encodeURIComponent(errorMessage(error))}`); }
+  try { await receivePurchase(cuidInput.parse(value(form, "id")), admin.id); } catch (error) { redirect(`/purchases?error=${encodeURIComponent(errorMessage(error))}`); }
   updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.inventory); updateTag(CACHE_TAGS.purchases); redirect("/purchases?success=Purchase+received+and+stock+updated+successfully");
 }
 

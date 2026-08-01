@@ -45,6 +45,8 @@ export async function closeInventoryIssue(input: unknown, adminId: string) {
 export async function adjustStock(input: unknown, adminId: string) {
   const data = adjustmentInput.parse(input), quantity = new Prisma.Decimal(data.quantity);
   return prisma.$transaction(async (tx) => {
+    const item = await tx.inventoryItem.findFirst({ where: { id: data.inventoryItemId, isActive: true }, select: { id: true } });
+    if (!item) throw new Error("INVENTORY_ITEM_UNAVAILABLE");
     if (data.direction === "OUT") {
       const stock = await getStock(tx, data.inventoryItemId);
       if (stock.available.lessThan(quantity)) throw new Error("INSUFFICIENT_STOCK");

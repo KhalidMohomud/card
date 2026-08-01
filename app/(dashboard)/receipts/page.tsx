@@ -9,6 +9,7 @@ import { getCatalogData, getReceiptLedger } from "@/lib/cached-data";
 import { formatDateTime } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { requireUser } from "@/lib/session";
+import { receiptFilterInput } from "@/lib/validation";
 
 export const metadata = { title: "Receipts" };
 
@@ -16,24 +17,26 @@ export default async function ReceiptsPage({ searchParams }: { searchParams: Pro
   const user = await requireUser();
   if (user.role === "SUPERVISOR") redirect("/pos");
   const query = await searchParams;
-  const page = Math.max(Number(query.page) || 1, 1); const take = 25;
-  const [ledger, catalog] = await Promise.all([getReceiptLedger(query.status, query.from, query.to, query.q, page), getCatalogData()]);
+  const parsedFilters = receiptFilterInput.safeParse(query);
+  const filters = parsedFilters.success ? parsedFilters.data : { q: "", page: 1, status: undefined, from: undefined, to: undefined };
+  const page = filters.page; const take = 25;
+  const [ledger, catalog] = await Promise.all([getReceiptLedger(filters.status, filters.from, filters.to, filters.q, page), getCatalogData()]);
   const receipts = ledger.rows, total = ledger.total, settings = catalog.settings;
-  const hasFilters = Boolean(query.q || query.from || query.to || query.status);
+  const hasFilters = Boolean(filters.q || filters.from || filters.to || filters.status);
   const pageHref = (nextPage: number) => {
     const params = new URLSearchParams();
-    if (query.q) params.set("q", query.q); if (query.from) params.set("from", query.from); if (query.to) params.set("to", query.to); if (query.status) params.set("status", query.status);
+    if (filters.q) params.set("q", filters.q); if (filters.from) params.set("from", filters.from); if (filters.to) params.set("to", filters.to); if (filters.status) params.set("status", filters.status);
     params.set("page", String(nextPage)); return `?${params.toString()}`;
   };
 
   return <div className="page">
     <div className="page-head"><div><span className="eyebrow">Sales ledger</span><h1>Receipt history</h1><p>{total} matching receipt{total === 1 ? "" : "s"}.</p></div></div>
-    <Flash success={query.success} error={query.error} />
+    <Flash success={query.success} error={query.error ?? (!parsedFilters.success ? "Invalid receipt filters were ignored." : undefined)} />
     <Form action="/receipts" className="card filters receipt-filters">
-      <div className="field receipt-search-field"><label htmlFor="receipt-search">Search receipts</label><div className="search-input"><Search size={16} /><input id="receipt-search" name="q" defaultValue={query.q} placeholder="Receipt #, service, supervisor, payment…" /></div></div>
-      <div className="field"><label htmlFor="receipt-from">From</label><input className="input" id="receipt-from" type="date" name="from" defaultValue={query.from} /></div>
-      <div className="field"><label htmlFor="receipt-to">To</label><input className="input" id="receipt-to" type="date" name="to" defaultValue={query.to} /></div>
-      <div className="field"><label htmlFor="receipt-status">Status</label><select className="input" id="receipt-status" name="status" defaultValue={query.status}><option value="">All statuses</option><option>COMPLETED</option><option>CANCELLED</option></select></div>
+      <div className="field receipt-search-field"><label htmlFor="receipt-search">Search receipts</label><div className="search-input"><Search size={16} /><input id="receipt-search" name="q" defaultValue={filters.q} maxLength={120} placeholder="Receipt #, service, supervisor, payment…" /></div></div>
+      <div className="field"><label htmlFor="receipt-from">From</label><input className="input" id="receipt-from" type="date" name="from" defaultValue={filters.from} /></div>
+      <div className="field"><label htmlFor="receipt-to">To</label><input className="input" id="receipt-to" type="date" name="to" defaultValue={filters.to} /></div>
+      <div className="field"><label htmlFor="receipt-status">Status</label><select className="input" id="receipt-status" name="status" defaultValue={filters.status}><option value="">All statuses</option><option>COMPLETED</option><option>CANCELLED</option></select></div>
       <button className="btn btn-primary"><Search size={15} /> Search</button>
       {hasFilters && <Link className="btn btn-ghost" href="/receipts"><X size={15} /> Clear</Link>}
     </Form>

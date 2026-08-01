@@ -1,10 +1,11 @@
 import { after } from "next/server";
 import { NextResponse } from "next/server";
 import { audit } from "@/lib/audit";
-import { clearSessionCookie, getRawSessionToken, isSameOriginRequest, readDatabaseSession, revokeSessionToken } from "@/lib/auth-session";
+import { clearSessionCookie, getRawSessionToken, readDatabaseSession, revokeSessionToken } from "@/lib/auth-session";
+import { isSameOriginMutation } from "@/lib/request-security";
 
 export async function POST(request: Request) {
-  if (!isSameOriginRequest(request)) return NextResponse.json({ message: "Request rejected." }, { status: 403 });
+  if (!isSameOriginMutation(request)) return NextResponse.json({ message: "Request rejected." }, { status: 403 });
   const [rawToken, session] = await Promise.all([getRawSessionToken(), readDatabaseSession()]);
   await revokeSessionToken(rawToken);
   const response = NextResponse.json({ success: true });

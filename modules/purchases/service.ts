@@ -3,9 +3,23 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { purchaseInput } from "@/lib/validation";
 
+type PurchaseData = ReturnType<typeof purchaseInput.parse>;
+
+async function assertActiveReferences(tx: Prisma.TransactionClient, data: PurchaseData) {
+  const [supplier, item, paymentMethod] = await Promise.all([
+    tx.supplier.findFirst({ where: { id: data.supplierId, isActive: true }, select: { id: true } }),
+    tx.inventoryItem.findFirst({ where: { id: data.inventoryItemId, isActive: true }, select: { id: true } }),
+    data.paymentMethodId
+      ? tx.paymentMethod.findFirst({ where: { id: data.paymentMethodId, isActive: true }, select: { id: true } })
+      : null,
+  ]);
+  if (!supplier || !item || (data.paymentMethodId && !paymentMethod)) throw new Error("PURCHASE_REFERENCE_UNAVAILABLE");
+}
+
 export async function createPurchase(input: unknown, adminId: string) {
   const data = purchaseInput.parse(input);
   return prisma.$transaction(async (tx) => {
+    await assertActiveReferences(tx, data);
     const purchase = await tx.purchase.create({ data: { supplierId: data.supplierId, paymentMethodId: data.paymentMethodId, supplierInvoiceNumber: data.supplierInvoiceNumber, purchaseDate: data.purchaseDate, paymentStatus: data.paymentStatus, notes: data.notes, createdByUserId: adminId } });
     await tx.purchaseItem.create({ data: { purchaseId: purchase.id, inventoryItemId: data.inventoryItemId, quantity: new Prisma.Decimal(data.quantity), unitCost: new Prisma.Decimal(data.unitCost) } });
     await tx.auditLog.create({ data: { userId: adminId, action: "PURCHASE_CREATED", entityType: "Purchase", entityId: purchase.id } });
@@ -27,6 +41,7 @@ function purchaseSnapshot(purchase: { supplierId: string; supplierInvoiceNumber:
 export async function updatePurchase(id: string, input: unknown, adminId: string) {
   const data = purchaseInput.parse(input);
   return prisma.$transaction(async (tx) => {
+    await assertActiveReferences(tx, data);
     const current = await tx.purchase.findUnique({ where: { id }, include: { items: true } });
     if (!current) throw new Error("PURCHASE_NOT_FOUND");
     if (current.status !== "DRAFT") throw new Error("PURCHASE_NOT_EDITABLE");

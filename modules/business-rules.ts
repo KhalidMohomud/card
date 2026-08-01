@@ -35,5 +35,6 @@ export function canRemoveStock(available: Prisma.Decimal, requested: Prisma.Deci
 
 export function canViewSalaryExpenses(role: UserRole) { return role === "ADMIN" || role === "MANAGER"; }
 export function canStartSession(isActive: boolean) { return isActive; }
+export function isEligibleSupervisor(role: UserRole, isActive: boolean) { return role === "SUPERVISOR" && isActive; }
 export function nextPrintCount(current: number) { return current + 1; }
 export function purchaseMovementCount(itemCount: number, alreadyReceived: boolean) { return alreadyReceived ? 0 : itemCount; }

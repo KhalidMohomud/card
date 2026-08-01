@@ -87,7 +87,7 @@ export async function updateInventoryItem(input: unknown, userId: string) {
   return prisma.$transaction(async (tx) => {
     const [current, category] = await Promise.all([
       tx.inventoryItem.findUnique({ where: { id: data.id }, include: { _count: { select: { purchaseItems: true, issueItems: true, movements: true } } } }),
-      tx.inventoryCategory.findUnique({ where: { id: data.categoryId }, select: { id: true } }),
+      tx.inventoryCategory.findFirst({ where: { id: data.categoryId, isActive: true }, select: { id: true } }),
     ]);
     if (!current) throw new Error("INVENTORY_ITEM_NOT_FOUND");
     if (!category) throw new Error("INVENTORY_CATEGORY_UNAVAILABLE");
@@ -113,8 +113,10 @@ function normalizeSupplier(data: { name: string; phone?: string; email?: string;
   return { name: data.name, phone: data.phone ?? null, email: data.email || null, address: data.address ?? null, notes: data.notes ?? null };
 }
 
-function supplierAuditValues(supplier: { name: string; phone: string | null; email: string | null; address: string | null; notes: string | null; isActive: boolean }) {
-  return { name: supplier.name, phone: supplier.phone, email: supplier.email, address: supplier.address, notes: supplier.notes, isActive: supplier.isActive };
+function supplierAuditValues(supplier: { name: string; isActive: boolean }) {
+  // Contact details and free-form notes are intentionally excluded from the
+  // long-lived audit ledger; the event still records identity and state.
+  return { name: supplier.name, isActive: supplier.isActive };
 }
 
 function inventoryItemAuditValues(item: { categoryId: string; sku: string; name: string; type: string; unit: string; minimumStockLevel: Prisma.Decimal; description: string | null; isActive: boolean }) {
