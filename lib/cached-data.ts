@@ -2,7 +2,7 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { businessDateEnd, businessDateStart, getBusinessPeriods } from "@/lib/dates";
+import { businessDateEnd, businessDateInputValue, businessDateStart, getBusinessPeriods } from "@/lib/dates";
 import { stockSnapshot } from "@/modules/inventory/stock";
 
 export const CACHE_TAGS = {
@@ -202,12 +202,12 @@ const getIssueLedgerForQuery = unstable_cache(async (searchValue: string, status
   const [rows, total] = await Promise.all([
     prisma.inventoryIssue.findMany({
       where, orderBy: [{ issueDate: "desc" }, { createdAt: "desc" }], skip: (page - 1) * take, take,
-      select: { id: true, supervisorUserId: true, issueDate: true, status: true, notes: true, closedAt: true, cancelledAt: true, cancellationReason: true, supervisor: { select: { fullName: true } }, items: { orderBy: { inventoryItem: { name: "asc" } }, select: { id: true, quantityIssued: true, quantityReturned: true, quantityDamaged: true, quantityLost: true, conditionOut: true, conditionIn: true, notes: true, inventoryItem: { select: { name: true, sku: true, type: true, unit: true } } } } },
+      select: { id: true, supervisorUserId: true, issueDate: true, status: true, notes: true, closedAt: true, cancelledAt: true, cancellationReason: true, supervisor: { select: { fullName: true } }, items: { orderBy: { inventoryItem: { name: "asc" } }, select: { id: true, inventoryItemId: true, quantityIssued: true, quantityReturned: true, quantityDamaged: true, quantityLost: true, conditionOut: true, conditionIn: true, notes: true, inventoryItem: { select: { name: true, sku: true, type: true, unit: true } } } } },
     }),
     prisma.inventoryIssue.count({ where }),
   ]);
-  return { total, rows: rows.map((row) => ({ ...row, issueDate: row.issueDate.toISOString(), closedAt: row.closedAt?.toISOString() ?? null, cancelledAt: row.cancelledAt?.toISOString() ?? null, items: row.items.map((item) => ({ ...item, quantityIssued: item.quantityIssued.toString(), quantityReturned: item.quantityReturned.toString(), quantityDamaged: item.quantityDamaged.toString(), quantityLost: item.quantityLost.toString() })) })) };
-}, ["swiftwash-issue-ledger-v3"], { tags: [CACHE_TAGS.issues], revalidate: 5 * 60 });
+  return { total, rows: rows.map((row) => ({ ...row, issueDate: row.issueDate.toISOString(), issueDateInput: businessDateInputValue(row.issueDate), closedAt: row.closedAt?.toISOString() ?? null, cancelledAt: row.cancelledAt?.toISOString() ?? null, items: row.items.map((item) => ({ ...item, quantityIssued: item.quantityIssued.toString(), quantityReturned: item.quantityReturned.toString(), quantityDamaged: item.quantityDamaged.toString(), quantityLost: item.quantityLost.toString() })) })) };
+}, ["swiftwash-issue-ledger-v5"], { tags: [CACHE_TAGS.issues], revalidate: 5 * 60 });
 
 export function getIssueLedger(search = "", status = "", supervisorId = "", from = "", to = "", page = 1) {
   return getIssueLedgerForQuery(search, status, supervisorId, from, to, page);

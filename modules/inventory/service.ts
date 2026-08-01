@@ -36,7 +36,7 @@ export async function issueInventory(input: unknown, userId: string) {
       const item = itemsById.get(line.inventoryItemId)!;
       if (item.type === "CONSUMABLE" && line.conditionOut !== "GOOD") throw new Error("CONSUMABLE_CONDITION_INVALID");
       const stock = stocks.get(item.id)!;
-      if (stock.available.lessThan(new Prisma.Decimal(line.quantity))) throw new Error("INSUFFICIENT_STOCK");
+      if (stock.available.lessThan(new Prisma.Decimal(line.quantity))) throw new Error(`INSUFFICIENT_STOCK_DETAIL:${JSON.stringify({ name: item.name, available: stock.available.toString(), unit: item.unit })}`);
     }
 
     const issue = await tx.inventoryIssue.create({
@@ -81,7 +81,7 @@ export async function updateInventoryIssue(input: unknown, userId: string) {
       const item = itemsById.get(line.inventoryItemId)!;
       if (item.type === "CONSUMABLE" && line.conditionOut !== "GOOD") throw new Error("CONSUMABLE_CONDITION_INVALID");
       const effectiveAvailable = stocks.get(item.id)!.available.add(currentQuantityByItem.get(item.id) ?? new Prisma.Decimal(0));
-      if (effectiveAvailable.lessThan(new Prisma.Decimal(line.quantity))) throw new Error("INSUFFICIENT_STOCK");
+      if (effectiveAvailable.lessThan(new Prisma.Decimal(line.quantity))) throw new Error(`INSUFFICIENT_STOCK_DETAIL:${JSON.stringify({ name: item.name, available: effectiveAvailable.toString(), unit: item.unit })}`);
     }
     const changed = await tx.inventoryIssue.updateMany({
       where: { id: data.id, status: "ISSUED" },

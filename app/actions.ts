@@ -13,7 +13,7 @@ import { SESSION_COOKIE_NAME } from "@/lib/auth-session";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { cancelReceipt, recordReprint } from "@/modules/receipts/service";
 import { cancelExpense, createExpense, deleteExpense, updateExpense } from "@/modules/expenses/service";
-import { adjustStock, cancelInventoryIssue, closeInventoryIssue, issueInventory, reconcileStocktake } from "@/modules/inventory/service";
+import { adjustStock, cancelInventoryIssue, closeInventoryIssue, deleteInventoryIssue, issueInventory, reconcileStocktake, updateInventoryIssue } from "@/modules/inventory/service";
 import { createInventoryCategory, createInventoryItem, createSupplier, deleteInventoryCategory, deleteInventoryItem, deleteSupplier, updateInventoryCategory, updateInventoryItem, updateSupplier } from "@/modules/inventory/catalog";
 import { createPurchase, deletePurchase, receivePurchase, updatePurchase } from "@/modules/purchases/service";
 
@@ -22,6 +22,12 @@ function optionalDate(form: FormData, key: string) { const v = value(form, key);
 function errorMessage(error: unknown) {
   if (!(error instanceof Error)) return "The request could not be completed.";
   if (error.message.startsWith("OVERRIDE_REQUIRED:")) return `Commission exceeds the ${error.message.split(":")[1]} completed receipts. Add an override reason to continue.`;
+  if (error.message.startsWith("INSUFFICIENT_STOCK_DETAIL:")) {
+    try {
+      const detail = JSON.parse(error.message.slice("INSUFFICIENT_STOCK_DETAIL:".length)) as { name: string; available: string; unit: string };
+      return `${detail.name} has only ${detail.available} ${detail.unit} available. Reduce the quantity or receive more stock.`;
+    } catch { return "Not enough available stock."; }
+  }
   const messages: Record<string, string> = {
     INSUFFICIENT_STOCK: "Not enough available stock.", PURCHASE_NOT_RECEIVABLE: "This purchase has already been received or is not ready.", PURCHASE_ALREADY_RECEIVED: "This purchase was already received.",
     EXPENSE_NOT_FOUND: "This expense no longer exists.", EXPENSE_NOT_EDITABLE: "Cancelled expenses cannot be edited.",
@@ -30,6 +36,8 @@ function errorMessage(error: unknown) {
     REUSABLE_ITEMS_MUST_BE_ACCOUNTED_FOR: "All reusable items must be returned, damaged, or lost before closing.",
     QUANTITY_EXCEEDS_ISSUED: "Returned, damaged, and lost quantities exceed the issued quantity.",
     ISSUE_NOT_OPEN: "This inventory issue is already closed or no longer available.", ITEM_OR_SUPERVISOR_UNAVAILABLE: "Choose an active supervisor and inventory item.",
+    ISSUE_NOT_FOUND: "This handover no longer exists.", ISSUE_NOT_EDITABLE: "Only an open handover can be updated.",
+    ISSUE_NOT_DELETABLE: "Only an open handover can be deleted. Closed handovers remain locked for accurate history.",
     ISSUE_NOT_CANCELLABLE: "Only an open handover can be cancelled.", ISSUE_LINES_INCOMPLETE: "Complete every item in this handover before closing.",
     CONSUMABLE_CONDITION_INVALID: "Consumable items must be issued in usable condition.", CONSUMABLE_OUTCOME_INVALID: "Consumables can only be returned or recorded as used.",
     LOSS_DAMAGE_REASON_REQUIRED: "Add a reason for every damaged or lost item.", STOCKTAKE_NO_VARIANCE: "The counted quantity already matches the system quantity.",
@@ -341,6 +349,20 @@ export async function issueInventoryAction(form: FormData) {
   try { await issueInventory({ supervisorUserId: value(form, "supervisorUserId"), issueDate: businessDateStart(value(form, "issueDate")), items: jsonArray(form, "itemsJson"), notes: value(form, "notes") }, admin.id); }
   catch (error) { redirect(`/inventory/issues?error=${encodeURIComponent(errorMessage(error))}`); }
   updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.inventory); updateTag(CACHE_TAGS.issues); updateTag(CACHE_TAGS.reports); redirect("/inventory/issues?success=Daily+inventory+handover+created+successfully");
+}
+
+export async function updateIssueAction(form: FormData) {
+  const admin = await requireManagement();
+  try { await updateInventoryIssue({ id: value(form, "id"), supervisorUserId: value(form, "supervisorUserId"), issueDate: businessDateStart(value(form, "issueDate")), items: jsonArray(form, "itemsJson"), notes: value(form, "notes") }, admin.id); }
+  catch (error) { redirect(`/inventory/issues?error=${encodeURIComponent(errorMessage(error))}`); }
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.inventory); updateTag(CACHE_TAGS.issues); updateTag(CACHE_TAGS.reports); redirect("/inventory/issues?success=Daily+inventory+handover+updated+successfully");
+}
+
+export async function deleteIssueAction(form: FormData) {
+  const admin = await requireManagement();
+  try { await deleteInventoryIssue(cuidInput.parse(value(form, "id")), admin.id); }
+  catch (error) { redirect(`/inventory/issues?error=${encodeURIComponent(errorMessage(error))}`); }
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.inventory); updateTag(CACHE_TAGS.issues); updateTag(CACHE_TAGS.reports); redirect("/inventory/issues?success=Open+handover+deleted+and+stock+restored+successfully");
 }
 
 export async function closeIssueAction(form: FormData) {
