@@ -42,8 +42,10 @@ describe("inventory ledger rules", () => {
       { movementType: "PURCHASE_IN", quantity: new Prisma.Decimal(20) },
       { movementType: "CONSUMABLE_ISSUE_OUT", quantity: new Prisma.Decimal(6) },
       { movementType: "CONSUMABLE_RETURN_IN", quantity: new Prisma.Decimal(1) },
+      { movementType: "STOCKTAKE_IN", quantity: new Prisma.Decimal(2) },
+      { movementType: "STOCKTAKE_OUT", quantity: new Prisma.Decimal(1) },
     ]);
-    expect(balance.toString()).toBe("15");
+    expect(balance.toString()).toBe("16");
   });
 
   it("keeps reusable issued items owned while reducing available quantity", () => {

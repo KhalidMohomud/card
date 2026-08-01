@@ -4,10 +4,11 @@ import { PackagePlus, Plus, X } from "lucide-react";
 import { useRef } from "react";
 import { useFormStatus } from "react-dom";
 import { createPurchaseAction } from "@/app/actions";
+import { PurchaseLinesEditor, type PurchaseItemOption } from "@/components/purchase-lines-editor";
 
 type Option = { id: string; name: string };
 
-export function PurchaseCreateDialog({ suppliers, methods, items, today }: { suppliers: Option[]; methods: Option[]; items: Option[]; today: string }) {
+export function PurchaseCreateDialog({ suppliers, methods, items, today }: { suppliers: Option[]; methods: Option[]; items: PurchaseItemOption[]; today: string }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const form = useRef<HTMLFormElement>(null);
 
@@ -34,14 +35,11 @@ export function PurchaseCreateDialog({ suppliers, methods, items, today }: { sup
           <div className="account-form-grid">
             <div className="field"><label htmlFor="new-purchase-supplier">Supplier</label><select className="input" id="new-purchase-supplier" name="supplierId" required>{suppliers.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></div>
             <div className="field"><label htmlFor="new-purchase-date">Purchase date</label><input className="input" id="new-purchase-date" type="date" name="purchaseDate" defaultValue={today} required /></div>
-            <div className="field account-field-full"><label htmlFor="new-purchase-item">Inventory item</label><select className="input" id="new-purchase-item" name="inventoryItemId" required>{items.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></div>
-            <div className="field"><label htmlFor="new-purchase-quantity">Quantity</label><input className="input" id="new-purchase-quantity" name="quantity" inputMode="decimal" placeholder="0.000" required /></div>
-            <div className="field"><label htmlFor="new-purchase-cost">Unit cost</label><input className="input" id="new-purchase-cost" name="unitCost" inputMode="decimal" placeholder="0.00" required /></div>
             <div className="field"><label htmlFor="new-purchase-method">Payment method <span className="muted">— optional</span></label><select className="input" id="new-purchase-method" name="paymentMethodId"><option value="">Not specified</option>{methods.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></div>
             <div className="field"><label htmlFor="new-purchase-payment">Payment status</label><select className="input" id="new-purchase-payment" name="paymentStatus" defaultValue="PAID"><option value="PAID">Paid</option><option value="UNPAID">Unpaid</option></select></div>
             <div className="field account-field-full"><label htmlFor="new-purchase-invoice">Supplier invoice <span className="muted">— optional</span></label><input className="input" id="new-purchase-invoice" name="supplierInvoiceNumber" /></div>
             <div className="field account-field-full"><label htmlFor="new-purchase-notes">Notes <span className="muted">— optional</span></label><textarea className="input" id="new-purchase-notes" name="notes" /></div>
-          </div>
+          </div><PurchaseLinesEditor items={items} />
           <div className="account-dialog-actions">
             <button className="btn btn-ghost" type="button" onClick={closeAndReset}>Cancel</button>
             <CreateDraftButton />

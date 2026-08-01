@@ -5,17 +5,45 @@ import { movementBalance } from "@/modules/business-rules";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
+type StockItem = { id: string; type: InventoryItemType };
+
+export async function getStocks(db: Db, items: StockItem[]) {
+  const ids = [...new Set(items.map((item) => item.id))];
+  if (!ids.length) return new Map<string, { owned: Prisma.Decimal; assigned: Prisma.Decimal; available: Prisma.Decimal }>();
+  const reusableIds = items.filter((item) => item.type === "REUSABLE").map((item) => item.id);
+  const [movementGroups, issueGroups] = await Promise.all([
+    db.inventoryMovement.groupBy({ by: ["inventoryItemId", "movementType"], where: { inventoryItemId: { in: ids } }, _sum: { quantity: true } }),
+    reusableIds.length
+      ? db.inventoryIssueItem.groupBy({
+          by: ["inventoryItemId"],
+          where: { inventoryItemId: { in: reusableIds }, inventoryIssue: { status: { in: ["ISSUED", "CLOSED"] } } },
+          _sum: { quantityIssued: true, quantityReturned: true, quantityDamaged: true, quantityLost: true },
+        })
+      : Promise.resolve([]),
+  ]);
+  const movementsByItem = new Map<string, { movementType: string; quantity: Prisma.Decimal }[]>();
+  for (const movement of movementGroups) {
+    const rows = movementsByItem.get(movement.inventoryItemId) ?? [];
+    rows.push({ movementType: movement.movementType, quantity: movement._sum.quantity ?? new Prisma.Decimal(0) });
+    movementsByItem.set(movement.inventoryItemId, rows);
+  }
+  const assignedByItem = new Map<string, Prisma.Decimal>();
+  for (const issue of issueGroups) {
+    assignedByItem.set(issue.inventoryItemId, (issue._sum.quantityIssued ?? new Prisma.Decimal(0))
+      .sub(issue._sum.quantityReturned ?? new Prisma.Decimal(0))
+      .sub(issue._sum.quantityDamaged ?? new Prisma.Decimal(0))
+      .sub(issue._sum.quantityLost ?? new Prisma.Decimal(0)));
+  }
+  return new Map(items.map((item) => {
+    const owned = movementBalance(movementsByItem.get(item.id) ?? []);
+    const assigned = item.type === "REUSABLE" ? (assignedByItem.get(item.id) ?? new Prisma.Decimal(0)) : new Prisma.Decimal(0);
+    return [item.id, { owned, assigned, available: owned.sub(assigned) }];
+  }));
+}
+
 export async function getStock(db: Db, inventoryItemId: string, type?: InventoryItemType) {
   const item = type ? { type } : await db.inventoryItem.findUniqueOrThrow({ where: { id: inventoryItemId }, select: { type: true } });
-  const movements = await db.inventoryMovement.findMany({ where: { inventoryItemId }, select: { movementType: true, quantity: true } });
-  const owned = movementBalance(movements);
-  if (item.type === "CONSUMABLE") return { owned, assigned: new Prisma.Decimal(0), available: owned };
-  const issueItems = await db.inventoryIssueItem.findMany({
-    where: { inventoryItemId, inventoryIssue: { status: { in: ["ISSUED", "CLOSED"] } } },
-    select: { quantityIssued: true, quantityReturned: true, quantityDamaged: true, quantityLost: true },
-  });
-  const assigned = issueItems.reduce((total, row) => total.add(row.quantityIssued).sub(row.quantityReturned).sub(row.quantityDamaged).sub(row.quantityLost), new Prisma.Decimal(0));
-  return { owned, assigned, available: owned.sub(assigned) };
+  return (await getStocks(db, [{ id: inventoryItemId, type: item.type }])).get(inventoryItemId)!;
 }
 
 export async function stockSnapshot() {

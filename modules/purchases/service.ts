@@ -6,14 +6,14 @@ import { purchaseInput } from "@/lib/validation";
 type PurchaseData = ReturnType<typeof purchaseInput.parse>;
 
 async function assertActiveReferences(tx: Prisma.TransactionClient, data: PurchaseData) {
-  const [supplier, item, paymentMethod] = await Promise.all([
+  const [supplier, items, paymentMethod] = await Promise.all([
     tx.supplier.findFirst({ where: { id: data.supplierId, isActive: true }, select: { id: true } }),
-    tx.inventoryItem.findFirst({ where: { id: data.inventoryItemId, isActive: true }, select: { id: true } }),
+    tx.inventoryItem.findMany({ where: { id: { in: data.items.map((line) => line.inventoryItemId) }, isActive: true }, select: { id: true } }),
     data.paymentMethodId
       ? tx.paymentMethod.findFirst({ where: { id: data.paymentMethodId, isActive: true }, select: { id: true } })
       : null,
   ]);
-  if (!supplier || !item || (data.paymentMethodId && !paymentMethod)) throw new Error("PURCHASE_REFERENCE_UNAVAILABLE");
+  if (!supplier || items.length !== data.items.length || (data.paymentMethodId && !paymentMethod)) throw new Error("PURCHASE_REFERENCE_UNAVAILABLE");
 }
 
 export async function createPurchase(input: unknown, adminId: string) {
@@ -21,7 +21,7 @@ export async function createPurchase(input: unknown, adminId: string) {
   return prisma.$transaction(async (tx) => {
     await assertActiveReferences(tx, data);
     const purchase = await tx.purchase.create({ data: { supplierId: data.supplierId, paymentMethodId: data.paymentMethodId, supplierInvoiceNumber: data.supplierInvoiceNumber, purchaseDate: data.purchaseDate, paymentStatus: data.paymentStatus, notes: data.notes, createdByUserId: adminId } });
-    await tx.purchaseItem.create({ data: { purchaseId: purchase.id, inventoryItemId: data.inventoryItemId, quantity: new Prisma.Decimal(data.quantity), unitCost: new Prisma.Decimal(data.unitCost) } });
+    await tx.purchaseItem.createMany({ data: data.items.map((line) => ({ purchaseId: purchase.id, inventoryItemId: line.inventoryItemId, quantity: new Prisma.Decimal(line.quantity), unitCost: new Prisma.Decimal(line.unitCost) })) });
     await tx.auditLog.create({ data: { userId: adminId, action: "PURCHASE_CREATED", entityType: "Purchase", entityId: purchase.id } });
     return purchase;
   });
@@ -51,7 +51,7 @@ export async function updatePurchase(id: string, input: unknown, adminId: string
     });
     if (changed.count !== 1) throw new Error("PURCHASE_NOT_EDITABLE");
     await tx.purchaseItem.deleteMany({ where: { purchaseId: id } });
-    await tx.purchaseItem.create({ data: { purchaseId: id, inventoryItemId: data.inventoryItemId, quantity: new Prisma.Decimal(data.quantity), unitCost: new Prisma.Decimal(data.unitCost) } });
+    await tx.purchaseItem.createMany({ data: data.items.map((line) => ({ purchaseId: id, inventoryItemId: line.inventoryItemId, quantity: new Prisma.Decimal(line.quantity), unitCost: new Prisma.Decimal(line.unitCost) })) });
     const purchase = await tx.purchase.findUniqueOrThrow({ where: { id }, include: { items: true } });
     await tx.auditLog.create({ data: { userId: adminId, action: "PURCHASE_UPDATED", entityType: "Purchase", entityId: id, oldValues: purchaseSnapshot(current), newValues: purchaseSnapshot(purchase) } });
     return purchase;

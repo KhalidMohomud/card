@@ -42,7 +42,7 @@ export const receiptFilterInput = z.object({
   to: optionalCalendarDate,
 }).superRefine(validateDateOrder);
 export const reportFilterInput = z.object({
-  type: z.enum(["sales", "expenses", "purchases", "stock"]).optional().default("sales"),
+  type: z.enum(["sales", "expenses", "purchases", "stock", "issues", "movements"]).optional().default("sales"),
   supervisorId: z.union([z.string().cuid(), z.literal("")]).optional().transform((value) => value || undefined),
   from: optionalCalendarDate,
   to: optionalCalendarDate,
@@ -109,18 +109,44 @@ export const supplierUpdateInput = supplierInput.extend({
   id: z.string().cuid(),
   isActive: z.enum(["true", "false"]).transform((value) => value === "true"),
 });
+const purchaseLineInput = z.object({ inventoryItemId: z.string().cuid(), quantity, unitCost: money });
 export const purchaseInput = z.object({
   supplierId: z.string().cuid(), paymentMethodId: z.string().optional().transform((v) => v || undefined),
   supplierInvoiceNumber: optionalShortText, purchaseDate: z.coerce.date(), paymentStatus: z.enum(["UNPAID", "PAID"]),
-  inventoryItemId: z.string().cuid(), quantity, unitCost: money, notes: optionalText,
-});
+  items: z.array(purchaseLineInput).min(1).max(50), notes: optionalText,
+}).superRefine((data, context) => uniqueItemLines(data.items, context));
+
+const condition = z.enum(["GOOD", "NEEDS_REPAIR", "DAMAGED", "LOST"]);
+const issueLineInput = z.object({ inventoryItemId: z.string().cuid(), quantity, conditionOut: condition.default("GOOD"), notes: optionalText });
 export const issueInput = z.object({
-  supervisorUserId: z.string().cuid(), issueDate: z.coerce.date(), inventoryItemId: z.string().cuid(), quantity, notes: optionalText,
+  supervisorUserId: z.string().cuid(), issueDate: z.coerce.date(), items: z.array(issueLineInput).min(1).max(50), notes: optionalText,
+}).superRefine((data, context) => uniqueItemLines(data.items, context));
+export const inventoryIssueUpdateInput = z.object({
+  id: z.string().cuid(), supervisorUserId: z.string().cuid(), issueDate: z.coerce.date(), items: z.array(issueLineInput).min(1).max(50), notes: optionalText,
+}).superRefine((data, context) => uniqueItemLines(data.items, context));
+const reconciliationLineInput = z.object({
+  issueItemId: z.string().cuid(), returned: nonnegativeQuantity.default("0"), damaged: nonnegativeQuantity.default("0"), lost: nonnegativeQuantity.default("0"), conditionIn: condition.optional(), notes: optionalText,
 });
-export const issueCloseInput = z.object({
-  issueItemId: z.string().cuid(), returned: nonnegativeQuantity.default("0"), damaged: nonnegativeQuantity.default("0"), lost: nonnegativeQuantity.default("0"), notes: optionalText,
-});
+export const issueCloseInput = z.object({ issueId: z.string().cuid(), items: z.array(reconciliationLineInput).min(1).max(50) });
+export const inventoryIssueCancelInput = z.object({ id: z.string().cuid(), reason: z.string().trim().min(5).max(500) });
+export const inventoryIssueFilterInput = z.object({
+  q: z.string().trim().max(120).optional().default(""),
+  status: z.union([z.enum(["ISSUED", "CLOSED", "CANCELLED"]), z.literal("")]).optional().transform((value) => value || undefined),
+  supervisorId: z.union([z.string().cuid(), z.literal("")]).optional().transform((value) => value || undefined),
+  from: optionalCalendarDate, to: optionalCalendarDate,
+  page: z.coerce.number().int().min(1).max(10_000).optional().default(1),
+}).superRefine(validateDateOrder);
+export const purchaseFilterInput = z.object({ q: z.string().trim().max(120).optional().default(""), page: z.coerce.number().int().min(1).max(10_000).optional().default(1) });
 export const adjustmentInput = z.object({ inventoryItemId: z.string().cuid(), direction: z.enum(["IN", "OUT"]), quantity, reason: z.string().trim().min(5).max(500) });
+export const stocktakeInput = z.object({ inventoryItemId: z.string().cuid(), countedAvailable: nonnegativeQuantity, reason: z.string().trim().min(5).max(500) });
+
+function uniqueItemLines(lines: { inventoryItemId: string }[], context: z.RefinementCtx) {
+  const ids = new Set<string>();
+  lines.forEach((line, index) => {
+    if (ids.has(line.inventoryItemId)) context.addIssue({ code: "custom", path: ["items", index, "inventoryItemId"], message: "Each inventory item can appear only once" });
+    ids.add(line.inventoryItemId);
+  });
+}
 export const settingsInput = z.object({
   businessName: requiredText, phone: z.string().trim().max(40), email: z.string().email().or(z.literal("")),
   address: z.string().trim().max(240), currencyCode: z.string().trim().length(3).toUpperCase(), receiptFooter: requiredText,

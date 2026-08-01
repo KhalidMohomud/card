@@ -61,6 +61,15 @@ enum InventoryMovementType {
   LOST_OUT
   ADJUSTMENT_IN
   ADJUSTMENT_OUT
+  STOCKTAKE_IN
+  STOCKTAKE_OUT
+}
+
+enum InventoryCondition {
+  GOOD
+  NEEDS_REPAIR
+  DAMAGED
+  LOST
 }
 
 model User {
@@ -88,6 +97,8 @@ model User {
   purchasesCreated      Purchase[]
   issuesReceived        InventoryIssue[]    @relation("IssueSupervisor")
   issuesCreated         InventoryIssue[]    @relation("IssueCreator")
+  issuesClosed          InventoryIssue[]    @relation("IssueCloser")
+  issuesCancelled       InventoryIssue[]    @relation("IssueCanceller")
   movementsCreated      InventoryMovement[]
   auditLogs             AuditLog[]
 
@@ -349,17 +360,23 @@ model PurchaseItem {
 }
 
 model InventoryIssue {
-  id               String               @id @default(cuid())
-  supervisorUserId String
-  supervisor       User                 @relation("IssueSupervisor", fields: [supervisorUserId], references: [id], onDelete: Restrict)
-  issuedByUserId   String
-  issuedByUser     User                 @relation("IssueCreator", fields: [issuedByUserId], references: [id], onDelete: Restrict)
-  issueDate        DateTime
-  status           InventoryIssueStatus @default(DRAFT)
-  notes            String?
-  createdAt        DateTime             @default(now())
-  closedAt         DateTime?
-  items            InventoryIssueItem[]
+  id                 String               @id @default(cuid())
+  supervisorUserId   String
+  supervisor         User                 @relation("IssueSupervisor", fields: [supervisorUserId], references: [id], onDelete: Restrict)
+  issuedByUserId     String
+  issuedByUser       User                 @relation("IssueCreator", fields: [issuedByUserId], references: [id], onDelete: Restrict)
+  issueDate          DateTime
+  status             InventoryIssueStatus @default(DRAFT)
+  notes              String?
+  createdAt          DateTime             @default(now())
+  closedAt           DateTime?
+  closedByUserId     String?
+  closedByUser       User?                @relation("IssueCloser", fields: [closedByUserId], references: [id], onDelete: Restrict)
+  cancelledAt        DateTime?
+  cancelledByUserId  String?
+  cancelledByUser    User?                @relation("IssueCanceller", fields: [cancelledByUserId], references: [id], onDelete: Restrict)
+  cancellationReason String?
+  items              InventoryIssueItem[]
 
   @@index([supervisorUserId, issueDate])
   @@index([status, issueDate])
@@ -376,6 +393,8 @@ model InventoryIssueItem {
   quantityReturned Decimal             @default(0) @db.Decimal(14, 3)
   quantityDamaged  Decimal             @default(0) @db.Decimal(14, 3)
   quantityLost     Decimal             @default(0) @db.Decimal(14, 3)
+  conditionOut     InventoryCondition  @default(GOOD)
+  conditionIn      InventoryCondition?
   returnedAt       DateTime?
   notes            String?
   movements        InventoryMovement[]

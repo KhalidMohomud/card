@@ -208,6 +208,7 @@ textarea.input { min-height: 82px; resize: vertical; }
 .confirm-dialog-success .confirm-dialog-warning { border-color: #cce6dc; color: var(--brand-dark); background: #f3faf7; }
 .record-dialog { width: min(760px, calc(100vw - 40px)); }
 .purchase-dialog { width: min(680px, calc(100vw - 40px)); }
+.inventory-handover-dialog { width: min(980px, calc(100vw - 40px)); }
 .record-audit-note { margin: -2px 0 0; color: var(--muted); font-size: 11px; }
 .record-locked-note { margin: 20px 24px; padding: 14px 16px; border: 1px solid #ead9ae; border-radius: 12px; background: #fff9e9; color: #70571c; font-size: 12px; line-height: 1.5; }
 .record-receive-note { min-width: 0; display: flex; align-items: center; gap: 11px; padding: 12px 14px; border: 1px solid #cce6dc; border-radius: 12px; background: #f3faf7; color: var(--brand-dark); }
@@ -260,6 +261,51 @@ textarea.input { min-height: 82px; resize: vertical; }
 .issue-notes strong { font-size: 12px; }
 .issue-notes span { color: var(--muted); font-size: 10px; }
 .issue-notes p { margin: 5px 0 0; font-size: 11px; line-height: 1.5; white-space: pre-wrap; }
+.line-editor { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: #f8faf8; }
+.line-editor-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.line-editor-head > div { display: grid; gap: 2px; }
+.line-editor-head strong { font-size: 13px; }
+.line-editor-head span { color: var(--muted); font-size: 10px; }
+.line-editor-row, .purchase-line-row { position: relative; display: grid; grid-template-columns: minmax(220px, 2fr) minmax(120px, .75fr) minmax(130px, 1fr) minmax(180px, 1.3fr) 36px; align-items: end; gap: 9px; padding: 14px 12px 12px 28px; border: 1px solid #dbe3df; border-radius: 12px; background: white; }
+.purchase-line-row { grid-template-columns: minmax(220px, 2fr) minmax(120px, .8fr) minmax(120px, .8fr) minmax(100px, .65fr) 36px; }
+.line-number { position: absolute; top: 9px; left: 8px; width: 17px; height: 17px; display: grid; place-items: center; border-radius: 50%; color: var(--brand-dark); background: var(--mint); font-size: 8px; font-weight: 850; }
+.line-remove { margin-bottom: 4px; color: var(--danger); }
+.line-remove:disabled { opacity: .3; cursor: not-allowed; }
+.line-total { display: grid; gap: 6px; align-self: center; padding-top: 16px; }
+.line-total span { color: var(--muted); font-size: 9px; font-weight: 750; text-transform: uppercase; }
+.line-total strong { font-size: 13px; }
+.handover-summary { display: grid; gap: 3px; min-width: 220px; }
+.handover-summary span, .handover-summary small { color: var(--muted); font-size: 10px; }
+.handover-summary strong { color: var(--ink); }
+.reconciliation-list { display: grid; gap: 12px; }
+.reconciliation-line { display: grid; gap: 12px; padding: 15px; border: 1px solid var(--line); border-radius: 14px; background: #fbfcfb; }
+.reconciliation-line-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.reconciliation-line-head > div { display: grid; gap: 2px; }
+.reconciliation-line-head > div span { color: var(--muted); font-size: 10px; }
+.reconciliation-fields { display: grid; grid-template-columns: repeat(4, minmax(100px, 1fr)); gap: 9px; align-items: end; }
+.reconciliation-notes { grid-column: 1 / -1; }
+.used-readout { min-height: 65px; display: grid; align-content: center; gap: 4px; padding: 10px 12px; border-radius: 10px; color: var(--brand-dark); background: var(--mint); }
+.used-readout span { color: var(--muted); text-transform: uppercase; letter-spacing: .6px; font-size: 8px; font-weight: 800; }
+.cancel-handover-form { min-width: min(360px, 100%); display: flex; align-items: center; gap: 8px; }
+.cancel-handover-form textarea { min-height: 44px; max-height: 90px; }
+.closed-line-list { display: grid; gap: 10px; }
+.closed-line { display: grid; grid-template-columns: minmax(180px, 1fr) 2fr; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #fbfcfb; }
+.closed-line > div:first-child { display: grid; gap: 3px; }
+.closed-line > div:first-child span { color: var(--muted); font-size: 10px; text-transform: capitalize; }
+.closed-line-values { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px 15px; }
+.closed-line-values span { color: var(--muted); font-size: 10px; }
+.closed-line-values strong { color: var(--ink); margin-left: 3px; }
+.closed-line > p { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 10px; }
+.cancelled-record { padding: 14px 16px; border: 1px solid #efcccc; border-radius: 12px; color: #8f3030; background: #fff5f5; }
+.cancelled-record p { margin: 5px 0; font-size: 11px; }
+.cancelled-record span { font-size: 9px; }
+.inventory-ledger-filters { grid-template-columns: minmax(240px, 2fr) repeat(4, minmax(130px, 1fr)) auto; }
+.ledger-title-row { display: flex; justify-content: space-between; align-items: end; margin: 0 2px 10px; }
+.ledger-title-row h2 { margin: 0; font-size: 18px; }
+.ledger-title-row span { color: var(--muted); font-size: 10px; }
+.pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 16px; }
+.pager span { color: var(--muted); font-size: 11px; font-weight: 750; }
+.pager .disabled { pointer-events: none; opacity: .45; }
 .receipt-screen { min-height: 100vh; background: #edf1ef; padding: 1px 0; }
 .receipt-paper { width: 54mm; margin: 28px auto; background: white; color: #000; padding: 2mm; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
 .receipt-paper h1 { text-align: center; font-size: 17px; margin: 3px 0; overflow-wrap: anywhere; }
@@ -271,6 +317,7 @@ textarea.input { min-height: 82px; resize: vertical; }
 
 @media (max-width: 1450px) { .two-grid { grid-template-columns: 1fr; } }
 @media (max-width: 1050px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .pos-layout, .settings-grid { grid-template-columns: 1fr; } .checkout, .security-settings-card { position: static; } }
+@media (max-width: 1200px) { .line-editor-row, .purchase-line-row { grid-template-columns: repeat(2, minmax(0, 1fr)); padding-left: 32px; } .line-remove { position: absolute; top: 8px; right: 8px; } .inventory-ledger-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); } .inventory-ledger-filters .search-filter { grid-column: span 2; } }
 @media (max-width: 760px) {
   .app-shell { display: block; padding-bottom: calc(82px + env(safe-area-inset-bottom)); } .sidebar { display: none; } .topbar { height: 62px; padding: 0 18px; }
   .page { padding: 24px 16px 40px; } .page-head { align-items: flex-start; flex-direction: column; } .page-head .staff-create-trigger, .page-head .purchase-create-trigger, .page-head .expense-create-trigger, .page-head .inventory-create-trigger, .page-head .inventory-issue-trigger { width: 100%; } .stats-grid, .three-grid { grid-template-columns: 1fr 1fr; }
@@ -333,6 +380,11 @@ textarea.input { min-height: 82px; resize: vertical; }
   .service-table td:nth-child(3) { padding-bottom: 0; border-bottom: 0; font-size: inherit; }
   .inventory-resource-table td:nth-child(3), .inventory-stock-table td:nth-child(3) { padding-bottom: 0; border-bottom: 0; font-size: inherit; }
   .inventory-issue-table td:nth-child(3) { padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+  .reconciliation-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cancel-handover-form { align-items: stretch; flex-direction: column; }
+  .cancel-handover-form .btn { width: 100%; }
+  .closed-line { grid-template-columns: 1fr; }
+  .closed-line-values { justify-content: flex-start; }
   .inventory-summary-grid, .inventory-shortcuts { grid-template-columns: 1fr; }
   .login-shell { grid-template-columns: 1fr; } .login-art { display: none; } .login-panel { min-height: 100vh; }
 }
@@ -353,6 +405,12 @@ textarea.input { min-height: 82px; resize: vertical; }
   .issue-summary > div { padding: 11px 18px; }
   .issue-outcome-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .issue-closed-details { padding: 18px; }
+  .line-editor { padding: 10px; }
+  .line-editor-row, .purchase-line-row, .inventory-ledger-filters { grid-template-columns: 1fr; }
+  .inventory-ledger-filters .search-filter { grid-column: auto; }
+  .reconciliation-fields { grid-template-columns: 1fr; }
+  .reconciliation-line-head { align-items: flex-start; flex-direction: column; }
+  .pager { justify-content: space-between; }
   .service-catalog-head { align-items: stretch; flex-direction: column; }
   .catalog-search { width: 100%; }
   .ledger-search-actions { width: 100%; justify-content: stretch; }

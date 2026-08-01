@@ -15,8 +15,8 @@ export function reusableBalances(owned: Prisma.Decimal, issued: Prisma.Decimal, 
   return { owned: owned.sub(damaged).sub(lost), assigned, available: owned.sub(damaged).sub(lost).sub(assigned) };
 }
 
-const incomingMovements = new Set(["PURCHASE_IN", "CONSUMABLE_RETURN_IN", "ADJUSTMENT_IN"]);
-const outgoingMovements = new Set(["CONSUMABLE_ISSUE_OUT", "DAMAGED_OUT", "LOST_OUT", "ADJUSTMENT_OUT"]);
+const incomingMovements = new Set(["PURCHASE_IN", "CONSUMABLE_RETURN_IN", "ADJUSTMENT_IN", "STOCKTAKE_IN"]);
+const outgoingMovements = new Set(["CONSUMABLE_ISSUE_OUT", "DAMAGED_OUT", "LOST_OUT", "ADJUSTMENT_OUT", "STOCKTAKE_OUT"]);
 export function movementBalance(movements: { movementType: string; quantity: Prisma.Decimal }[]) {
   return movements.reduce((total, movement) => {
     if (incomingMovements.has(movement.movementType)) return total.add(movement.quantity);

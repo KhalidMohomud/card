@@ -148,7 +148,7 @@ export function getExpenseLedger(page: number) {
   return getExpenseLedgerForPage(page);
 }
 
-const getPurchaseLedgerForQuery = unstable_cache(async (searchValue: string) => {
+const getPurchaseLedgerForQuery = unstable_cache(async (searchValue: string, page: number) => {
   const search = searchValue.trim().slice(0, 120);
   const matchingStatuses = (["DRAFT", "RECEIVED", "CANCELLED"] as const).filter((value) => value.toLowerCase().includes(search.toLowerCase()));
   const matchingPaymentStatuses = (["PAID", "UNPAID"] as const).filter((value) => value.toLowerCase().includes(search.toLowerCase()));
@@ -161,17 +161,16 @@ const getPurchaseLedgerForQuery = unstable_cache(async (searchValue: string) => 
     ...matchingStatuses.map((status) => ({ status })),
     ...matchingPaymentStatuses.map((paymentStatus) => ({ paymentStatus })),
   ] } : {};
-  const rows = await prisma.purchase.findMany({
-    where,
-    orderBy: { purchaseDate: "desc" },
-    take: 50,
+  const take = 25;
+  const [rows, total] = await Promise.all([prisma.purchase.findMany({
+    where, orderBy: [{ purchaseDate: "desc" }, { createdAt: "desc" }], skip: (page - 1) * take, take,
     select: {
       id: true, purchaseDate: true, supplierId: true, paymentMethodId: true, supplierInvoiceNumber: true,
       paymentStatus: true, notes: true, status: true, supplier: { select: { id: true, name: true } },
       items: { select: { id: true, inventoryItemId: true, quantity: true, unitCost: true, inventoryItem: { select: { id: true, name: true } } } },
     },
-  });
-  return rows.map((row) => ({
+  }), prisma.purchase.count({ where })]);
+  return { total, rows: rows.map((row) => ({
     id: row.id, supplierId: row.supplierId, paymentMethodId: row.paymentMethodId, paymentStatus: row.paymentStatus, notes: row.notes,
     purchaseDate: row.purchaseDate.toISOString(),
     supplier: row.supplier,
@@ -179,21 +178,40 @@ const getPurchaseLedgerForQuery = unstable_cache(async (searchValue: string) => 
     status: row.status,
     items: row.items.map((item) => ({ id: item.id, inventoryItemId: item.inventoryItemId, inventoryItem: item.inventoryItem, quantity: item.quantity.toString(), unitCost: item.unitCost.toFixed(2) })),
     total: row.items.reduce((sum, item) => sum.add(item.quantity.mul(item.unitCost)), new Prisma.Decimal(0)).toFixed(2),
-  }));
-}, ["swiftwash-purchase-ledger-v3"], { tags: [CACHE_TAGS.purchases], revalidate: 5 * 60 });
+  })) };
+}, ["swiftwash-purchase-ledger-v4"], { tags: [CACHE_TAGS.purchases], revalidate: 5 * 60 });
 
-export function getPurchaseLedger(search?: string) {
-  return getPurchaseLedgerForQuery(search ?? "");
+export function getPurchaseLedger(search = "", page = 1) {
+  return getPurchaseLedgerForQuery(search, page);
 }
 
-export const getIssueLedger = unstable_cache(async () => {
-  const rows = await prisma.inventoryIssue.findMany({
-    orderBy: { issueDate: "desc" },
-    take: 50,
-    select: { id: true, issueDate: true, status: true, notes: true, closedAt: true, supervisor: { select: { fullName: true } }, items: { select: { id: true, quantityIssued: true, quantityReturned: true, quantityDamaged: true, quantityLost: true, notes: true, inventoryItem: { select: { name: true, sku: true, type: true, unit: true } } } } },
-  });
-  return rows.map((row) => ({ id: row.id, issueDate: row.issueDate.toISOString(), status: row.status, notes: row.notes, closedAt: row.closedAt?.toISOString() ?? null, supervisor: row.supervisor, items: row.items.map((item) => ({ id: item.id, quantityIssued: item.quantityIssued.toString(), quantityReturned: item.quantityReturned.toString(), quantityDamaged: item.quantityDamaged.toString(), quantityLost: item.quantityLost.toString(), notes: item.notes, inventoryItem: item.inventoryItem })) }));
-}, ["swiftwash-issue-ledger-v2"], { tags: [CACHE_TAGS.issues], revalidate: 5 * 60 });
+const getIssueLedgerForQuery = unstable_cache(async (searchValue: string, statusValue: string, supervisorId: string, fromValue: string, toValue: string, page: number) => {
+  const search = searchValue.trim().slice(0, 120);
+  const where: Prisma.InventoryIssueWhereInput = {
+    ...(statusValue ? { status: statusValue as "ISSUED" | "CLOSED" | "CANCELLED" } : {}),
+    ...(supervisorId ? { supervisorUserId: supervisorId } : {}),
+    ...(fromValue || toValue ? { issueDate: { gte: fromValue ? businessDateStart(fromValue) : undefined, lte: toValue ? businessDateEnd(toValue) : undefined } } : {}),
+    ...(search ? { OR: [
+      { supervisor: { is: { OR: [{ fullName: { contains: search, mode: "insensitive" } }, { username: { contains: search, mode: "insensitive" } }] } } },
+      { notes: { contains: search, mode: "insensitive" } },
+      { cancellationReason: { contains: search, mode: "insensitive" } },
+      { items: { some: { OR: [{ inventoryItem: { is: { name: { contains: search, mode: "insensitive" } } } }, { inventoryItem: { is: { sku: { contains: search, mode: "insensitive" } } } }, { notes: { contains: search, mode: "insensitive" } }] } } },
+    ] } : {}),
+  };
+  const take = 25;
+  const [rows, total] = await Promise.all([
+    prisma.inventoryIssue.findMany({
+      where, orderBy: [{ issueDate: "desc" }, { createdAt: "desc" }], skip: (page - 1) * take, take,
+      select: { id: true, supervisorUserId: true, issueDate: true, status: true, notes: true, closedAt: true, cancelledAt: true, cancellationReason: true, supervisor: { select: { fullName: true } }, items: { orderBy: { inventoryItem: { name: "asc" } }, select: { id: true, quantityIssued: true, quantityReturned: true, quantityDamaged: true, quantityLost: true, conditionOut: true, conditionIn: true, notes: true, inventoryItem: { select: { name: true, sku: true, type: true, unit: true } } } } },
+    }),
+    prisma.inventoryIssue.count({ where }),
+  ]);
+  return { total, rows: rows.map((row) => ({ ...row, issueDate: row.issueDate.toISOString(), closedAt: row.closedAt?.toISOString() ?? null, cancelledAt: row.cancelledAt?.toISOString() ?? null, items: row.items.map((item) => ({ ...item, quantityIssued: item.quantityIssued.toString(), quantityReturned: item.quantityReturned.toString(), quantityDamaged: item.quantityDamaged.toString(), quantityLost: item.quantityLost.toString() })) })) };
+}, ["swiftwash-issue-ledger-v3"], { tags: [CACHE_TAGS.issues], revalidate: 5 * 60 });
+
+export function getIssueLedger(search = "", status = "", supervisorId = "", from = "", to = "", page = 1) {
+  return getIssueLedgerForQuery(search, status, supervisorId, from, to, page);
+}
 
 const getAuditLedgerForQuery = unstable_cache(async (action: string, entity: string, page: number) => {
   const take = 50;
@@ -281,12 +299,13 @@ const getReportSnapshotForRange = unstable_cache(async (startIso: string, endIso
   const paidExpenseWhere: Prisma.ExpenseWhereInput = { ...expenseWhere, status: "ACTIVE", paymentStatus: "PAID" };
   const movementWhere: Prisma.InventoryMovementWhereInput = { createdAt: { gte: start, lte: end }, ...(selectedId ? { inventoryIssueItem: { inventoryIssue: { supervisorUserId: selectedId } } } : {}) };
   const issueWhere: Prisma.InventoryIssueWhereInput = { issueDate: { gte: start, lte: end }, ...(selectedId ? { supervisorUserId: selectedId } : {}) };
-  const [receipts, expenses, purchaseSummary, movements, issueCount, stock, catalog, salesSummary, expenseSummary, serviceGroups, supervisorGroups, paymentGroups, users] = await Promise.all([
+  const [receipts, expenses, purchaseSummary, movements, issueCount, issueRows, stock, catalog, salesSummary, expenseSummary, serviceGroups, supervisorGroups, paymentGroups, users] = await Promise.all([
     prisma.receipt.findMany({ where: receiptWhere, select: { id: true, issuedAt: true, serviceNameSnapshot: true, servicePriceSnapshot: true, status: true, createdByUser: { select: { fullName: true } } }, orderBy: { issuedAt: "desc" }, take: 25 }),
     prisma.expense.findMany({ where: expenseWhere, select: { id: true, expenseDate: true, type: true, title: true, amount: true, status: true }, orderBy: { expenseDate: "desc" }, take: 25 }),
     selectedId ? Promise.resolve({ count: 0, lineCount: 0, total: "0.00", paidTotal: "0.00", unpaidTotal: "0.00" }) : getPurchaseSummary(start, end),
     prisma.inventoryMovement.findMany({ where: movementWhere, select: { id: true, createdAt: true, movementType: true, quantity: true, inventoryItem: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 25 }),
     prisma.inventoryIssue.count({ where: issueWhere }),
+    prisma.inventoryIssue.findMany({ where: issueWhere, orderBy: [{ issueDate: "desc" }, { createdAt: "desc" }], take: 25, select: { id: true, issueDate: true, status: true, supervisor: { select: { fullName: true } }, items: { select: { quantityIssued: true, quantityReturned: true, quantityDamaged: true, quantityLost: true, inventoryItem: { select: { name: true, type: true, unit: true } } } } } }),
     getCachedStockSnapshot(),
     getCatalogData(),
     prisma.receipt.aggregate({ where: completedReceiptWhere, _count: true, _sum: { servicePriceSnapshot: true } }),
@@ -312,6 +331,7 @@ const getReportSnapshotForRange = unstable_cache(async (startIso: string, endIso
     expenseRows: expenses.map((row) => ({ id: row.id, expenseDate: row.expenseDate.toISOString(), type: row.type, title: row.title, amount: row.amount.toFixed(2), status: row.status })),
     movements: movements.map((row) => ({ id: row.id, createdAt: row.createdAt.toISOString(), item: row.inventoryItem.name, type: row.movementType, quantity: row.quantity.toString() })),
     issueCount,
+    issueRows: issueRows.map((row) => ({ id: row.id, issueDate: row.issueDate.toISOString(), status: row.status, supervisor: row.supervisor.fullName, items: row.items.map((line) => ({ item: line.inventoryItem.name, type: line.inventoryItem.type, unit: line.inventoryItem.unit, issued: line.quantityIssued.toString(), returned: line.quantityReturned.toString(), consumed: line.inventoryItem.type === "CONSUMABLE" ? line.quantityIssued.sub(line.quantityReturned).toString() : "0", damaged: line.quantityDamaged.toString(), lost: line.quantityLost.toString() })) })),
     stock,
     byService: serviceGroups.map((row) => ({ name: row.serviceNameSnapshot, count: row._count, total: (row._sum.servicePriceSnapshot ?? zero).toFixed(2) })),
     bySupervisor: supervisorGroups.map((row) => ({ name: userNames.get(row.createdByUserId) ?? "Unknown", count: row._count, total: (row._sum.servicePriceSnapshot ?? zero).toFixed(2) })),

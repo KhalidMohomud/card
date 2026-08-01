@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 import { LockKeyhole, PackageCheck, Pencil, Save, X } from "lucide-react";
 import { deletePurchaseAction, receivePurchaseAction, updatePurchaseAction } from "@/app/actions";
 import { ConfirmActionButton } from "@/components/confirm-action-button";
+import { PurchaseLinesEditor, type PurchaseItemOption } from "@/components/purchase-lines-editor";
 
 type Option = { id: string; name: string };
 type Purchase = {
@@ -13,12 +14,10 @@ type Purchase = {
   supplier: Option; items: { id: string; inventoryItemId: string; inventoryItem: Option; quantity: string; unitCost: string }[];
 };
 
-export function PurchaseActions({ purchase, suppliers, methods, items }: { purchase: Purchase; suppliers: Option[]; methods: Option[]; items: Option[] }) {
+export function PurchaseActions({ purchase, suppliers, methods, items }: { purchase: Purchase; suppliers: Option[]; methods: Option[]; items: PurchaseItemOption[] }) {
   const dialog = useRef<HTMLDialogElement>(null);
   if (purchase.status !== "DRAFT") return <span className="locked-label" title="Received purchases are locked because inventory was already posted"><LockKeyhole size={14} /> Posted</span>;
-  const item = purchase.items[0];
   const supplierOptions = includeCurrent(suppliers, purchase.supplier);
-  const itemOptions = includeCurrent(items, item?.inventoryItem ?? null);
   const titleId = `manage-purchase-${purchase.id}`;
   return <div className="actions purchase-actions">
     <form action={receivePurchaseAction}><input type="hidden" name="id" value={purchase.id} /><ConfirmActionButton tone="success" triggerClassName="btn btn-soft btn-compact" triggerIcon={<PackageCheck size={14} />} triggerLabel="Receive" title="Receive this purchase?" description="The delivery will be posted to inventory and this draft will become locked." warning="Confirm the delivered item, quantity, and cost before posting." confirmLabel="Receive purchase" pendingLabel="Receiving…" /></form>
@@ -34,11 +33,8 @@ export function PurchaseActions({ purchase, suppliers, methods, items }: { purch
             <div className="field"><label htmlFor={`${purchase.id}-method`}>Payment method</label><select className="input" id={`${purchase.id}-method`} name="paymentMethodId" defaultValue={purchase.paymentMethodId ?? ""}><option value="">Not specified</option>{methods.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></div>
             <div className="field"><label htmlFor={`${purchase.id}-payment`}>Payment status</label><select className="input" id={`${purchase.id}-payment`} name="paymentStatus" defaultValue={purchase.paymentStatus}><option value="PAID">Paid</option><option value="UNPAID">Unpaid</option></select></div>
             <div className="field account-field-full"><label htmlFor={`${purchase.id}-invoice`}>Supplier invoice <span className="muted">— optional</span></label><input className="input" id={`${purchase.id}-invoice`} name="supplierInvoiceNumber" defaultValue={purchase.supplierInvoiceNumber ?? ""} /></div>
-            <div className="field account-field-full"><label htmlFor={`${purchase.id}-item`}>Inventory item</label><select className="input" id={`${purchase.id}-item`} name="inventoryItemId" defaultValue={item?.inventoryItemId ?? ""} required>{itemOptions.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></div>
-            <div className="field"><label htmlFor={`${purchase.id}-quantity`}>Quantity</label><input className="input" id={`${purchase.id}-quantity`} name="quantity" inputMode="decimal" defaultValue={item?.quantity ?? ""} required /></div>
-            <div className="field"><label htmlFor={`${purchase.id}-cost`}>Unit cost</label><input className="input" id={`${purchase.id}-cost`} name="unitCost" inputMode="decimal" defaultValue={item?.unitCost ?? ""} required /></div>
             <div className="field account-field-full"><label htmlFor={`${purchase.id}-notes`}>Notes <span className="muted">— optional</span></label><textarea className="input" id={`${purchase.id}-notes`} name="notes" defaultValue={purchase.notes ?? ""} /></div>
-          </div>
+          </div><PurchaseLinesEditor items={items} initial={purchase.items.map((line) => ({ inventoryItemId: line.inventoryItemId, quantity: line.quantity, unitCost: line.unitCost }))} />
           <div className="record-receive-note"><PackageCheck size={18} /><div><strong>Still a draft</strong><span>Saving does not change inventory. Use Receive when the delivery is verified.</span></div></div>
           <div className="account-dialog-actions"><button className="btn btn-ghost" type="button" onClick={() => dialog.current?.close()}>Cancel</button><SaveButton /></div>
         </form>

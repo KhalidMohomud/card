@@ -6,7 +6,7 @@ import { createCsv } from "@/lib/csv";
 import { canAccessReceipt } from "@/lib/permissions";
 import { hasJsonContentType, isSameOriginMutation } from "@/lib/request-security";
 import { createSessionToken, isUsableSessionRecord, sessionTokenDigest } from "@/lib/session-token";
-import { loginInput, purchaseInput, receiptFilterInput, reportFilterInput, settingsInput, supervisorInput } from "@/lib/validation";
+import { issueCloseInput, issueInput, loginInput, purchaseInput, receiptFilterInput, reportFilterInput, settingsInput, stocktakeInput, supervisorInput } from "@/lib/validation";
 import { isEligibleSupervisor } from "@/modules/business-rules";
 import { LOGIN_BLOCK_MS, nextLoginThrottle } from "@/lib/login-throttle-policy";
 
@@ -127,16 +127,27 @@ describe("injection and validation controls", () => {
     expect(reportFilterInput.safeParse({ type: "../../etc/passwd" }).success).toBe(false);
     expect(reportFilterInput.safeParse({ from: "2026-02-30", to: "2026-03-01" }).success).toBe(false);
     expect(reportFilterInput.safeParse({ from: "2026-08-02", to: "2026-08-01" }).success).toBe(false);
-    const basePurchase = { supplierId: "cm12345678901234567890123", purchaseDate: new Date(), paymentStatus: "PAID", inventoryItemId: "cm12345678901234567890124" };
-    expect(purchaseInput.safeParse({ ...basePurchase, quantity: "1", unitCost: "1" }).success).toBe(true);
-    expect(purchaseInput.safeParse({ ...basePurchase, quantity: "1", unitCost: "0" }).success).toBe(false);
-    expect(purchaseInput.safeParse({ ...basePurchase, quantity: "1000000000", unitCost: "1" }).success).toBe(false);
+    const basePurchase = { supplierId: "cm12345678901234567890123", purchaseDate: new Date(), paymentStatus: "PAID" };
+    expect(purchaseInput.safeParse({ ...basePurchase, items: [{ inventoryItemId: "cm12345678901234567890124", quantity: "1", unitCost: "1" }] }).success).toBe(true);
+    expect(purchaseInput.safeParse({ ...basePurchase, items: [{ inventoryItemId: "cm12345678901234567890124", quantity: "1", unitCost: "0" }] }).success).toBe(false);
+    expect(purchaseInput.safeParse({ ...basePurchase, items: [{ inventoryItemId: "cm12345678901234567890124", quantity: "1000000000", unitCost: "1" }] }).success).toBe(false);
   });
 
   it("allows only HTTP(S) logo URLs", () => {
     const settings = { businessName: "SwiftWash", phone: "", email: "", address: "", currencyCode: "USD", receiptFooter: "Thank you" };
     expect(settingsInput.safeParse({ ...settings, logoUrl: "javascript:alert(1)" }).success).toBe(false);
     expect(settingsInput.safeParse({ ...settings, logoUrl: "https://cdn.example/logo.png" }).success).toBe(true);
+  });
+
+  it("validates complete multi-line inventory handovers and reconciliation payloads", () => {
+    const supervisorUserId = "cm12345678901234567890123";
+    const firstItem = "cm12345678901234567890124";
+    const secondItem = "cm12345678901234567890125";
+    const handover = { supervisorUserId, issueDate: new Date(), items: [{ inventoryItemId: firstItem, quantity: "5", conditionOut: "GOOD" }, { inventoryItemId: secondItem, quantity: "2", conditionOut: "GOOD" }] };
+    expect(issueInput.safeParse(handover).success).toBe(true);
+    expect(issueInput.safeParse({ ...handover, items: [handover.items[0], handover.items[0]] }).success).toBe(false);
+    expect(issueCloseInput.safeParse({ issueId: supervisorUserId, items: [{ issueItemId: firstItem, returned: "1", damaged: "0", lost: "0", conditionIn: "GOOD" }, { issueItemId: secondItem, returned: "2", damaged: "0", lost: "0", conditionIn: "GOOD" }] }).success).toBe(true);
+    expect(stocktakeInput.safeParse({ inventoryItemId: firstItem, countedAvailable: "0", reason: "Month-end physical count" }).success).toBe(true);
   });
 
   it("escapes stored business text when React renders it", () => {
