@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { UserRole } from "@prisma/client";
-import { BarChart3, Boxes, Droplets, FileClock, HandCoins, LayoutDashboard, Menu, PackagePlus, ReceiptText, Settings, ShoppingCart, UserRound, UsersRound, X } from "lucide-react";
+import { BarChart3, Droplets, FileClock, HandCoins, LayoutDashboard, Menu, PackagePlus, ReceiptText, Settings, ShoppingCart, UserRound, UsersRound, X } from "lucide-react";
 import { LogoutButton } from "@/components/logout-button";
+import { MobileInventoryNavigation } from "@/components/inventory-navigation";
 
 const managementMenuLinks = [
   ["Dashboard", "/dashboard", LayoutDashboard], ["Open POS", "/pos", ShoppingCart], ["Receipts", "/receipts", ReceiptText],
   ["Services", "/services", Droplets], ["Staff", "/supervisors", UsersRound], ["Expenses", "/expenses", HandCoins],
-  ["Inventory", "/inventory", Boxes], ["Purchases", "/purchases", PackagePlus], ["Reports", "/reports", BarChart3],
+  ["Purchases", "/purchases", PackagePlus], ["Reports", "/reports", BarChart3],
 ] as const;
 const adminMenuLinks = [
   ...managementMenuLinks,
@@ -43,7 +44,7 @@ export function MobileNavigation({ user }: { user: { fullName: string; username?
     {open && <div className="mobile-drawer-layer"><button className="mobile-drawer-backdrop" type="button" aria-label="Close menu" onClick={() => setOpen(false)} /><section className="mobile-account-sheet" id="mobile-account-sheet" role="dialog" aria-modal="true" aria-label="Account and navigation">
       <div className="mobile-sheet-handle" />
       <div className="mobile-profile"><span className="mobile-avatar">{initials || "U"}</span><div><strong>{user.fullName}</strong><small>{user.username ? `@${user.username}` : user.role.toLowerCase()}</small></div><button className="icon-button" type="button" aria-label="Close menu" onClick={() => setOpen(false)}><X size={20} /></button></div>
-      {user.role !== "SUPERVISOR" && <><p className="mobile-sheet-label">Navigation</p><div className="mobile-menu-grid">{menuLinks.map(([label, href, Icon]) => <Link className={pathname === href ? "active" : ""} href={href} key={href} onClick={() => setOpen(false)}><Icon size={19} /><span>{label}</span></Link>)}</div></>}
+      {user.role !== "SUPERVISOR" && <><p className="mobile-sheet-label">Navigation</p><div className="mobile-menu-grid">{menuLinks.map(([label, href, Icon]) => <Fragment key={href}>{label === "Purchases" && <MobileInventoryNavigation onNavigate={() => setOpen(false)} />}<Link className={pathname === href ? "active" : ""} href={href} onClick={() => setOpen(false)}><Icon size={19} /><span>{label}</span></Link></Fragment>)}</div></>}
       {user.role === "SUPERVISOR" && <div className="mobile-role-card"><UserRound size={19} /><div><strong>Supervisor profile</strong><small>POS access only</small></div></div>}
       <div className="mobile-logout"><LogoutButton /></div>
     </section></div>}

@@ -1,14 +1,16 @@
 import Link from "next/link";
-import { BarChart3, Boxes, Droplets, FileClock, HandCoins, LayoutDashboard, PackagePlus, ReceiptText, Settings, ShoppingCart, UsersRound } from "lucide-react";
+import { Fragment } from "react";
+import { BarChart3, Droplets, FileClock, HandCoins, LayoutDashboard, PackagePlus, ReceiptText, Settings, ShoppingCart, UsersRound } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { LogoutButton } from "@/components/logout-button";
 import { MobileNavigation } from "@/components/mobile-navigation";
 import { SessionExpiry } from "@/components/session-expiry";
+import { DesktopInventoryNavigation } from "@/components/inventory-navigation";
 
 const managementLinks = [
   ["Dashboard", "/dashboard", LayoutDashboard], ["POS", "/pos", ShoppingCart], ["Receipts", "/receipts", ReceiptText],
   ["Services", "/services", Droplets], ["Staff", "/supervisors", UsersRound], ["Expenses", "/expenses", HandCoins],
-  ["Inventory", "/inventory", Boxes], ["Purchases", "/purchases", PackagePlus], ["Reports", "/reports", BarChart3],
+  ["Purchases", "/purchases", PackagePlus], ["Reports", "/reports", BarChart3],
 ] as const;
 const adminLinks = [
   ...managementLinks,
@@ -30,10 +32,7 @@ export function Shell({ user, children }: { user: { fullName: string; username?:
           <small>Operations POS</small>
         </span>
       </Link>
-      <nav className="nav">{links.map(([label, href, Icon]) => <Link className="nav-link" href={href} key={href}>
-        <Icon size={18} />
-        {label}
-      </Link>)}
+      <nav className="nav">{links.map(([label, href, Icon]) => <Fragment key={href}>{label === "Purchases" && <DesktopInventoryNavigation />}<Link className="nav-link" href={href}><Icon size={18} />{label}</Link></Fragment>)}
       </nav>
       <div className="sidebar-user">
         <strong>{user.fullName}</strong>

@@ -7,12 +7,13 @@ import { redirect } from "next/navigation";
 import { CACHE_TAGS } from "@/lib/cached-data";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, requireManagement, requireUser } from "@/lib/session";
-import { cancellationInput, inventoryItemInput, passwordChangeInput, paymentMethodInput, serviceInput, serviceUpdateInput, settingsInput, supervisorInput, supervisorUpdateInput, supplierInput } from "@/lib/validation";
+import { cancellationInput, passwordChangeInput, paymentMethodInput, serviceInput, serviceUpdateInput, settingsInput, supervisorInput, supervisorUpdateInput } from "@/lib/validation";
 import { SESSION_COOKIE_NAME } from "@/lib/auth-session";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { cancelReceipt, recordReprint } from "@/modules/receipts/service";
 import { cancelExpense, createExpense, deleteExpense, updateExpense } from "@/modules/expenses/service";
 import { adjustStock, closeInventoryIssue, issueInventory } from "@/modules/inventory/service";
+import { createInventoryCategory, createInventoryItem, createSupplier, deleteInventoryCategory, deleteInventoryItem, deleteSupplier, updateInventoryCategory, updateInventoryItem, updateSupplier } from "@/modules/inventory/catalog";
 import { createPurchase, deletePurchase, receivePurchase, updatePurchase } from "@/modules/purchases/service";
 
 function value(form: FormData, key: string) { return String(form.get(key) ?? ""); }
@@ -27,6 +28,11 @@ function errorMessage(error: unknown) {
     PURCHASE_NOT_DELETABLE: "Only draft purchases can be deleted. Received purchases are locked because stock was already posted.",
     REUSABLE_ITEMS_MUST_BE_ACCOUNTED_FOR: "All reusable items must be returned, damaged, or lost before closing.",
     QUANTITY_EXCEEDS_ISSUED: "Returned, damaged, and lost quantities exceed the issued quantity.",
+    INVENTORY_CATEGORY_NOT_FOUND: "This category no longer exists.", INVENTORY_CATEGORY_UNAVAILABLE: "Choose an available inventory category.",
+    INVENTORY_CATEGORY_NOT_DELETABLE: "This category contains inventory items. Archive it instead of deleting it.",
+    INVENTORY_ITEM_NOT_FOUND: "This inventory item no longer exists.", INVENTORY_ITEM_NOT_DELETABLE: "This item has stock or transaction history. Archive it instead of deleting it.",
+    INVENTORY_ITEM_TRACKING_LOCKED: "Type and unit cannot change after an item has stock history.",
+    SUPPLIER_NOT_FOUND: "This supplier no longer exists.", SUPPLIER_NOT_DELETABLE: "This supplier has purchase history. Archive it instead of deleting it.",
   };
   return messages[error.message] ?? "Check the form values and try again.";
 }
@@ -37,6 +43,10 @@ function expenseFormData(form: FormData) {
 
 function purchaseFormData(form: FormData) {
   return { supplierId: value(form, "supplierId"), paymentMethodId: value(form, "paymentMethodId"), supplierInvoiceNumber: value(form, "supplierInvoiceNumber"), purchaseDate: new Date(`${value(form, "purchaseDate")}T00:00:00`), paymentStatus: value(form, "paymentStatus"), inventoryItemId: value(form, "inventoryItemId"), quantity: value(form, "quantity"), unitCost: value(form, "unitCost"), notes: value(form, "notes") };
+}
+
+function inventoryItemFormData(form: FormData) {
+  return { categoryId: value(form, "categoryId"), sku: value(form, "sku"), name: value(form, "name"), type: value(form, "type"), unit: value(form, "unit"), minimumStockLevel: value(form, "minimumStockLevel"), description: value(form, "description") };
 }
 
 function canManageStaffAccount(operatorRole: UserRole, targetRole: UserRole) {
@@ -207,21 +217,66 @@ export async function cancelExpenseAction(form: FormData) {
 }
 
 export async function createSupplierAction(form: FormData) {
-  const admin = await requireManagement(); const data = supplierInput.parse({ name: value(form, "name"), phone: value(form, "phone"), email: value(form, "email"), address: value(form, "address") });
-  const row = await prisma.supplier.create({ data: { ...data, email: data.email || undefined } });
-  await prisma.auditLog.create({ data: { userId: admin.id, action: "SUPPLIER_CREATED", entityType: "Supplier", entityId: row.id } });
-  updateTag(CACHE_TAGS.reference); redirect("/inventory?success=Supplier+created");
+  const admin = await requireManagement();
+  try { await createSupplier({ name: value(form, "name"), phone: value(form, "phone"), email: value(form, "email"), address: value(form, "address"), notes: value(form, "notes") }, admin.id); }
+  catch { redirect("/inventory/suppliers?error=Check+the+supplier+details.+The+name+may+already+exist"); }
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.reference); redirect("/inventory/suppliers?success=Supplier+created+successfully");
 }
 
 export async function createInventoryCategoryAction(form: FormData) {
-  await requireManagement(); await prisma.inventoryCategory.create({ data: { name: value(form, "name").trim() } }); updateTag(CACHE_TAGS.reference); redirect("/inventory?success=Category+created");
+  const admin = await requireManagement();
+  try { await createInventoryCategory({ name: value(form, "name") }, admin.id); }
+  catch { redirect("/inventory/categories?error=Check+the+category+name.+It+may+already+exist"); }
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.inventory); redirect("/inventory/categories?success=Category+created+successfully");
 }
 
 export async function createInventoryItemAction(form: FormData) {
-  const admin = await requireManagement(); const data = inventoryItemInput.parse({ categoryId: value(form, "categoryId"), sku: value(form, "sku"), name: value(form, "name"), type: value(form, "type"), unit: value(form, "unit"), minimumStockLevel: value(form, "minimumStockLevel"), description: value(form, "description") });
-  const item = await prisma.inventoryItem.create({ data: { ...data, minimumStockLevel: new Prisma.Decimal(data.minimumStockLevel) } });
-  await prisma.auditLog.create({ data: { userId: admin.id, action: "INVENTORY_ITEM_CREATED", entityType: "InventoryItem", entityId: item.id } });
-  updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.inventory); redirect("/inventory?success=Inventory+item+created");
+  const admin = await requireManagement();
+  try { await createInventoryItem(inventoryItemFormData(form), admin.id); }
+  catch { redirect("/inventory/items?error=Check+the+item+details.+The+name+or+SKU+may+already+exist"); }
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.inventory); redirect("/inventory/items?success=Inventory+item+created+successfully");
+}
+
+export async function updateSupplierAction(form: FormData) {
+  const admin = await requireManagement();
+  try { await updateSupplier({ id: value(form, "id"), name: value(form, "name"), phone: value(form, "phone"), email: value(form, "email"), address: value(form, "address"), notes: value(form, "notes"), isActive: value(form, "isActive") }, admin.id); }
+  catch (error) { redirect(`/inventory/suppliers?error=${encodeURIComponent(errorMessage(error))}`); }
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.purchases); redirect("/inventory/suppliers?success=Supplier+updated+successfully");
+}
+
+export async function deleteSupplierAction(form: FormData) {
+  const admin = await requireManagement();
+  try { await deleteSupplier(value(form, "id"), admin.id); }
+  catch (error) { redirect(`/inventory/suppliers?error=${encodeURIComponent(errorMessage(error))}`); }
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.purchases); redirect("/inventory/suppliers?success=Supplier+deleted+successfully");
+}
+
+export async function updateInventoryCategoryAction(form: FormData) {
+  const admin = await requireManagement();
+  try { await updateInventoryCategory({ id: value(form, "id"), name: value(form, "name"), isActive: value(form, "isActive") }, admin.id); }
+  catch (error) { redirect(`/inventory/categories?error=${encodeURIComponent(errorMessage(error))}`); }
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.inventory); redirect("/inventory/categories?success=Category+updated+successfully");
+}
+
+export async function deleteInventoryCategoryAction(form: FormData) {
+  const admin = await requireManagement();
+  try { await deleteInventoryCategory(value(form, "id"), admin.id); }
+  catch (error) { redirect(`/inventory/categories?error=${encodeURIComponent(errorMessage(error))}`); }
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.inventory); redirect("/inventory/categories?success=Category+deleted+successfully");
+}
+
+export async function updateInventoryItemAction(form: FormData) {
+  const admin = await requireManagement();
+  try { await updateInventoryItem({ ...inventoryItemFormData(form), id: value(form, "id"), isActive: value(form, "isActive") }, admin.id); }
+  catch (error) { redirect(`/inventory/items?error=${encodeURIComponent(errorMessage(error))}`); }
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.inventory); redirect("/inventory/items?success=Inventory+item+updated+successfully");
+}
+
+export async function deleteInventoryItemAction(form: FormData) {
+  const admin = await requireManagement();
+  try { await deleteInventoryItem(value(form, "id"), admin.id); }
+  catch (error) { redirect(`/inventory/items?error=${encodeURIComponent(errorMessage(error))}`); }
+  updateTag(CACHE_TAGS.audit); updateTag(CACHE_TAGS.reference); updateTag(CACHE_TAGS.inventory); redirect("/inventory/items?success=Inventory+item+deleted+successfully");
 }
 
 export async function adjustStockAction(form: FormData) {

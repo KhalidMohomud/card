@@ -1,0 +1,14 @@
+"use client";
+
+import { Search, X } from "lucide-react";
+import { useMemo, useState } from "react";
+
+export type StockRow = { id: string; name: string; sku: string; unit: string; type: "CONSUMABLE" | "REUSABLE"; category: { id: string; name: string }; minimumStockLevel: string; owned: string; assigned: string; available: string; low: boolean };
+
+export function InventoryStockTable({ stock }: { stock: StockRow[] }) {
+  const [query, setQuery] = useState("");
+  const filtered = useMemo(() => { const needle = query.trim().toLocaleLowerCase(); return needle ? stock.filter((item) => [item.name, item.sku, item.unit, item.type, item.category.name, item.low ? "low stock" : "in stock"].some((value) => value.toLocaleLowerCase().includes(needle))) : stock; }, [query, stock]);
+  return <div className="card inventory-stock-card"><div className="card-head service-catalog-head"><div><h2>Current stock</h2><span className="service-result-count">{query ? `${filtered.length} of ${stock.length}` : `${stock.length} active items`}</span></div><div className="catalog-search"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search item, SKU, category…" aria-label="Search current inventory" />{query && <button type="button" aria-label="Clear inventory search" onClick={() => setQuery("")}><X size={16} /></button>}</div></div>
+    {!filtered.length ? <div className="empty service-search-empty"><Search size={27} /><strong>{stock.length ? "No matching stock" : "No active inventory items"}</strong><span>{stock.length ? "Try another item, SKU, category, or stock status." : "Create an item, then receive a purchase or post an adjustment."}</span>{query && <button className="btn btn-ghost" type="button" onClick={() => setQuery("")}>Clear search</button>}</div> : <div className="table-wrap record-table-wrap"><table className="record-table inventory-stock-table"><thead><tr><th>Item</th><th>Category</th><th>Owned</th><th>Assigned</th><th>Available</th><th>Minimum</th><th>Stock status</th></tr></thead><tbody>{filtered.map((item) => <tr key={item.id}><td data-label="Item"><div className="service-name-cell"><strong>{item.name}</strong><small>{item.sku} · {item.unit} · {item.type === "CONSUMABLE" ? "Consumable" : "Reusable"}</small></div></td><td data-label="Category">{item.category.name}</td><td data-label="Owned" className="amount">{item.owned}</td><td data-label="Assigned" className="amount">{item.assigned}</td><td data-label="Available" className={`amount ${item.low ? "text-danger" : ""}`}>{item.available}</td><td data-label="Minimum" className="amount">{item.minimumStockLevel}</td><td data-label="Stock status"><span className={`badge ${item.low ? "danger" : "success"}`}>{item.low ? "Low stock" : "In stock"}</span></td></tr>)}</tbody></table></div>}
+  </div>;
+}

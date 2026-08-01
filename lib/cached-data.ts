@@ -47,6 +47,34 @@ export const getReferenceData = unstable_cache(async () => {
   };
 }, ["swiftwash-reference-v1"], { tags: [CACHE_TAGS.reference], revalidate: 60 * 60 });
 
+export const getInventoryItemsForManagement = unstable_cache(async () => {
+  const rows = await prisma.inventoryItem.findMany({
+    orderBy: [{ isActive: "desc" }, { name: "asc" }],
+    select: {
+      id: true, categoryId: true, sku: true, name: true, type: true, unit: true, minimumStockLevel: true,
+      description: true, isActive: true, createdAt: true, category: { select: { id: true, name: true, isActive: true } },
+      _count: { select: { purchaseItems: true, issueItems: true, movements: true } },
+    },
+  });
+  return rows.map((row) => ({ ...row, minimumStockLevel: row.minimumStockLevel.toString(), createdAt: row.createdAt.toISOString() }));
+}, ["swiftwash-inventory-items-management-v1"], { tags: [CACHE_TAGS.inventory, CACHE_TAGS.reference], revalidate: 5 * 60 });
+
+export const getInventoryCategoriesForManagement = unstable_cache(async () => {
+  const rows = await prisma.inventoryCategory.findMany({
+    orderBy: [{ isActive: "desc" }, { name: "asc" }],
+    select: { id: true, name: true, isActive: true, createdAt: true, _count: { select: { items: true } } },
+  });
+  return rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }));
+}, ["swiftwash-inventory-categories-management-v1"], { tags: [CACHE_TAGS.inventory, CACHE_TAGS.reference], revalidate: 5 * 60 });
+
+export const getSuppliersForManagement = unstable_cache(async () => {
+  const rows = await prisma.supplier.findMany({
+    orderBy: [{ isActive: "desc" }, { name: "asc" }],
+    select: { id: true, name: true, phone: true, email: true, address: true, notes: true, isActive: true, createdAt: true, _count: { select: { purchases: true } } },
+  });
+  return rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }));
+}, ["swiftwash-suppliers-management-v1"], { tags: [CACHE_TAGS.purchases, CACHE_TAGS.reference], revalidate: 5 * 60 });
+
 export const getSupervisorAccounts = unstable_cache(async () => {
   const users = await prisma.user.findMany({ where: { role: { in: ["SUPERVISOR", "MANAGER"] } }, orderBy: { createdAt: "desc" }, select: { id: true, fullName: true, username: true, displayUsername: true, role: true, isActive: true, createdAt: true, _count: { select: { receiptsCreated: true } } } });
   return users.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }));

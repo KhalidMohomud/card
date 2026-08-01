@@ -52,9 +52,22 @@ export const expenseInput = z.object({
 export const inventoryItemInput = z.object({
   categoryId: z.string().cuid(), sku: requiredText, name: requiredText,
   type: z.enum(["CONSUMABLE", "REUSABLE"]), unit: requiredText,
-  minimumStockLevel: quantity, description: optionalText,
+  minimumStockLevel: nonnegativeQuantity, description: optionalText,
 });
-export const supplierInput = z.object({ name: requiredText, phone: optionalText, email: z.string().email().optional().or(z.literal("")), address: optionalText });
+export const inventoryItemUpdateInput = inventoryItemInput.extend({
+  id: z.string().cuid(),
+  isActive: z.enum(["true", "false"]).transform((value) => value === "true"),
+});
+export const inventoryCategoryInput = z.object({ name: requiredText });
+export const inventoryCategoryUpdateInput = inventoryCategoryInput.extend({
+  id: z.string().cuid(),
+  isActive: z.enum(["true", "false"]).transform((value) => value === "true"),
+});
+export const supplierInput = z.object({ name: requiredText, phone: optionalText, email: z.string().email().optional().or(z.literal("")), address: optionalText, notes: optionalText });
+export const supplierUpdateInput = supplierInput.extend({
+  id: z.string().cuid(),
+  isActive: z.enum(["true", "false"]).transform((value) => value === "true"),
+});
 export const purchaseInput = z.object({
   supplierId: z.string().cuid(), paymentMethodId: z.string().optional().transform((v) => v || undefined),
   supplierInvoiceNumber: optionalText, purchaseDate: z.coerce.date(), paymentStatus: z.enum(["UNPAID", "PAID"]),
