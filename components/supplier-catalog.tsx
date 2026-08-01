@@ -1,9 +1,10 @@
 "use client";
 
-import { Building2, Pencil, Plus, Save, Search, Trash2, Truck, X } from "lucide-react";
+import { Building2, Pencil, Plus, Save, Search, Truck, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { createSupplierAction, deleteSupplierAction, updateSupplierAction } from "@/app/actions";
+import { ConfirmActionButton } from "@/components/confirm-action-button";
 
 type Supplier = { id: string; name: string; phone: string | null; email: string | null; address: string | null; notes: string | null; isActive: boolean; createdAt: string; _count: { purchases: number } };
 
@@ -31,7 +32,7 @@ function SupplierManager({ supplier }: { supplier: Supplier }) {
   const dialog = useRef<HTMLDialogElement>(null);
   return <><button className="btn btn-ghost btn-compact" type="button" onClick={() => dialog.current?.showModal()}><Pencil size={14} /> Manage</button><dialog className="account-dialog record-dialog" ref={dialog} aria-labelledby={`manage-supplier-${supplier.id}`} onClick={(event) => { if (event.target === dialog.current) dialog.current.close(); }}><div className="account-dialog-panel"><div className="account-dialog-head"><span className="account-dialog-icon"><Building2 size={22} /></span><div className="account-dialog-title"><h2 id={`manage-supplier-${supplier.id}`}>Manage supplier</h2><p>Keep contact information current without changing old purchases.</p></div><button className="icon-button" type="button" aria-label="Close supplier editor" onClick={() => dialog.current?.close()}><X size={19} /></button></div>
     <form action={updateSupplierAction} className="account-edit-form"><input type="hidden" name="id" value={supplier.id} /><SupplierFields idPrefix={supplier.id} supplier={supplier} /><div className="account-dialog-actions"><button className="btn btn-ghost" type="button" onClick={() => dialog.current?.close()}>Cancel</button><SaveButton /></div></form>
-    <div className="danger-zone"><div><strong>Delete supplier</strong><p>{supplier._count.purchases ? "This supplier has purchase history. Archive it so historical purchasing records remain accurate." : "This unused supplier can be permanently deleted."}</p></div><form action={deleteSupplierAction}><input type="hidden" name="id" value={supplier.id} /><DeleteButton disabled={supplier._count.purchases > 0} name={supplier.name} /></form></div>
+    <div className="danger-zone"><div><strong>Delete supplier</strong><p>{supplier._count.purchases ? "This supplier has purchase history. Archive it so historical purchasing records remain accurate." : "This unused supplier can be permanently deleted."}</p></div><form action={deleteSupplierAction}><input type="hidden" name="id" value={supplier.id} /><ConfirmActionButton triggerLabel="Delete supplier" title={`Delete ${supplier.name}?`} description="This supplier and its contact details will be permanently removed." confirmLabel="Delete supplier" pendingLabel="Deleting…" disabled={supplier._count.purchases > 0} disabledReason="Archive suppliers that have purchase history" /></form></div>
   </div></dialog></>;
 }
 
@@ -45,4 +46,3 @@ function SupplierFields({ idPrefix, supplier }: { idPrefix: string; supplier?: S
 </div>; }
 function CreateButton() { const { pending } = useFormStatus(); return <button className="btn btn-primary" disabled={pending}><Plus size={16} />{pending ? "Adding…" : "Add supplier"}</button>; }
 function SaveButton() { const { pending } = useFormStatus(); return <button className="btn btn-primary" disabled={pending}><Save size={15} />{pending ? "Saving…" : "Save changes"}</button>; }
-function DeleteButton({ disabled, name }: { disabled: boolean; name: string }) { const { pending } = useFormStatus(); return <button className="btn btn-danger" disabled={disabled || pending} title={disabled ? "Archive suppliers that have purchase history" : undefined} onClick={(event) => { if (!window.confirm(`Permanently delete ${name}? This cannot be undone.`)) event.preventDefault(); }}><Trash2 size={15} />{pending ? "Deleting…" : "Delete supplier"}</button>; }

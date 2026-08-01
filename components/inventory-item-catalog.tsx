@@ -1,9 +1,10 @@
 "use client";
 
-import { Boxes, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
+import { Boxes, Pencil, Plus, Save, Search, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { createInventoryItemAction, deleteInventoryItemAction, updateInventoryItemAction } from "@/app/actions";
+import { ConfirmActionButton } from "@/components/confirm-action-button";
 
 type Category = { id: string; name: string; isActive: boolean };
 type InventoryItem = {
@@ -64,7 +65,7 @@ function InventoryItemManager({ item, categories }: { item: InventoryItem; categ
       <div className="account-dialog-panel">
         <div className="account-dialog-head"><span className="account-dialog-icon"><Boxes size={22} /></span><div className="account-dialog-title"><h2 id={`manage-item-${item.id}`}>Manage inventory item</h2><p>Update catalogue details without changing recorded stock movements.</p></div><button className="icon-button" type="button" aria-label="Close item editor" onClick={() => dialog.current?.close()}><X size={19} /></button></div>
         <form action={updateInventoryItemAction} className="account-edit-form"><input type="hidden" name="id" value={item.id} /><ItemFields idPrefix={item.id} categories={includeCategory(categories, item.category)} item={item} trackingLocked={historyCount > 0} /><div className="account-dialog-actions"><button className="btn btn-ghost" type="button" onClick={() => dialog.current?.close()}>Cancel</button><SubmitButton label="Save changes" pendingLabel="Saving…" icon="save" /></div></form>
-        <div className="danger-zone"><div><strong>Delete inventory item</strong><p>{historyCount ? "This item has business history. Set its status to Archived to keep records accurate." : "This unused item can be permanently deleted."}</p></div><form action={deleteInventoryItemAction}><input type="hidden" name="id" value={item.id} /><DeleteButton label="Delete item" disabled={historyCount > 0} confirm={`Permanently delete ${item.name}? This cannot be undone.`} /></form></div>
+        <div className="danger-zone"><div><strong>Delete inventory item</strong><p>{historyCount ? "This item has business history. Set its status to Archived to keep records accurate." : "This unused item can be permanently deleted."}</p></div><form action={deleteInventoryItemAction}><input type="hidden" name="id" value={item.id} /><ConfirmActionButton triggerLabel="Delete item" title={`Delete ${item.name}?`} description="This inventory item will be permanently removed from the catalogue." confirmLabel="Delete item" pendingLabel="Deleting…" disabled={historyCount > 0} disabledReason="Archive this item because it has business history" /></form></div>
       </div>
     </dialog>
   </>;
@@ -88,4 +89,3 @@ function CatalogSearch({ value, onChange, placeholder, label }: { value: string;
 function SearchEmpty({ label, clear }: { label: string; clear: () => void }) { return <div className="empty service-search-empty"><Search size={27} /><strong>No matching {label}</strong><span>Try another name, code, status, or description.</span><button className="btn btn-ghost" type="button" onClick={clear}>Clear search</button></div>; }
 function includeCategory(categories: Category[], current: Category) { return categories.some((category) => category.id === current.id) ? categories : [current, ...categories]; }
 function SubmitButton({ label, pendingLabel, icon }: { label: string; pendingLabel: string; icon: "plus" | "save" }) { const { pending } = useFormStatus(); return <button className="btn btn-primary" disabled={pending}>{icon === "plus" ? <Plus size={16} /> : <Save size={15} />}{pending ? pendingLabel : label}</button>; }
-function DeleteButton({ label, disabled, confirm }: { label: string; disabled: boolean; confirm: string }) { const { pending } = useFormStatus(); return <button className="btn btn-danger" disabled={disabled || pending} title={disabled ? "Archive this record because it has business history" : undefined} onClick={(event) => { if (!window.confirm(confirm)) event.preventDefault(); }}><Trash2 size={15} />{pending ? "Deleting…" : label}</button>; }

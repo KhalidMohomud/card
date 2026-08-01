@@ -2,9 +2,10 @@
 
 import { useRef } from "react";
 import { useFormStatus } from "react-dom";
-import { Pencil, Save, ShieldCheck, Trash2, UserRoundCog, X } from "lucide-react";
+import { Pencil, Save, ShieldCheck, UserRoundCog, X } from "lucide-react";
 import { deleteSupervisorAction, updateSupervisorAction } from "@/app/actions";
 import type { UserRole } from "@prisma/client";
+import { ConfirmActionButton } from "@/components/confirm-action-button";
 
 type StaffAccount = { id: string; fullName: string; username: string | null; displayUsername: string | null; role: UserRole };
 
@@ -25,7 +26,7 @@ export function SupervisorAccountManager({ user, canEditRole }: { user: StaffAcc
           <div className="account-security-note"><ShieldCheck size={18} /><div><strong>Session security</strong><span>Saving signs this staff member out of every device.</span></div></div>
           <div className="account-dialog-actions"><button className="btn btn-ghost" type="button" onClick={() => dialog.current?.close()}>Cancel</button><PendingButton label="Save changes" pendingLabel="Saving…" icon={<Save size={15} />} /></div>
         </form>
-        <div className="danger-zone"><div><strong>Delete this account</strong><p>Permanent deletion is available only when this staff member has no business history.</p></div><form action={deleteSupervisorAction}><input type="hidden" name="id" value={user.id} /><PendingDeleteButton name={user.fullName} /></form></div>
+        <div className="danger-zone"><div><strong>Delete this account</strong><p>Permanent deletion is available only when this staff member has no business history.</p></div><form action={deleteSupervisorAction}><input type="hidden" name="id" value={user.id} /><ConfirmActionButton triggerLabel="Delete account" title={`Delete ${user.fullName}?`} description="This staff account and its sign-in access will be permanently removed." confirmLabel="Delete account" pendingLabel="Deleting…" /></form></div>
       </div>
     </dialog>
   </>;
@@ -34,9 +35,4 @@ export function SupervisorAccountManager({ user, canEditRole }: { user: StaffAcc
 function PendingButton({ label, pendingLabel, icon }: { label: string; pendingLabel: string; icon: React.ReactNode }) {
   const { pending } = useFormStatus();
   return <button className="btn btn-primary" disabled={pending}>{pending ? pendingLabel : <>{icon}{label}</>}</button>;
-}
-
-function PendingDeleteButton({ name }: { name: string }) {
-  const { pending } = useFormStatus();
-  return <button className="btn btn-danger" disabled={pending} onClick={(event) => { if (!window.confirm(`Permanently delete ${name}? This cannot be undone.`)) event.preventDefault(); }}><Trash2 size={15} /> {pending ? "Deleting…" : "Delete account"}</button>;
 }

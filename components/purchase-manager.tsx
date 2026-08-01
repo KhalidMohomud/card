@@ -2,8 +2,9 @@
 
 import { useRef } from "react";
 import { useFormStatus } from "react-dom";
-import { LockKeyhole, PackageCheck, Pencil, Save, Trash2, X } from "lucide-react";
+import { LockKeyhole, PackageCheck, Pencil, Save, X } from "lucide-react";
 import { deletePurchaseAction, receivePurchaseAction, updatePurchaseAction } from "@/app/actions";
+import { ConfirmActionButton } from "@/components/confirm-action-button";
 
 type Option = { id: string; name: string };
 type Purchase = {
@@ -20,7 +21,7 @@ export function PurchaseActions({ purchase, suppliers, methods, items }: { purch
   const itemOptions = includeCurrent(items, item?.inventoryItem ?? null);
   const titleId = `manage-purchase-${purchase.id}`;
   return <div className="actions purchase-actions">
-    <form action={receivePurchaseAction}><input type="hidden" name="id" value={purchase.id} /><ReceiveButton /></form>
+    <form action={receivePurchaseAction}><input type="hidden" name="id" value={purchase.id} /><ConfirmActionButton tone="success" triggerClassName="btn btn-soft btn-compact" triggerIcon={<PackageCheck size={14} />} triggerLabel="Receive" title="Receive this purchase?" description="The delivery will be posted to inventory and this draft will become locked." warning="Confirm the delivered item, quantity, and cost before posting." confirmLabel="Receive purchase" pendingLabel="Receiving…" /></form>
     <button className="btn btn-ghost btn-compact" type="button" onClick={() => dialog.current?.showModal()}><Pencil size={14} /> Manage</button>
     <dialog className="account-dialog record-dialog purchase-dialog" ref={dialog} aria-labelledby={titleId} onClick={(event) => { if (event.target === dialog.current) dialog.current.close(); }}>
       <div className="account-dialog-panel">
@@ -41,13 +42,11 @@ export function PurchaseActions({ purchase, suppliers, methods, items }: { purch
           <div className="record-receive-note"><PackageCheck size={18} /><div><strong>Still a draft</strong><span>Saving does not change inventory. Use Receive when the delivery is verified.</span></div></div>
           <div className="account-dialog-actions"><button className="btn btn-ghost" type="button" onClick={() => dialog.current?.close()}>Cancel</button><SaveButton /></div>
         </form>
-        <div className="danger-zone"><div><strong>Delete this draft</strong><p>Drafts have not changed inventory and can be safely removed.</p></div><form action={deletePurchaseAction}><input type="hidden" name="id" value={purchase.id} /><DeleteButton /></form></div>
+        <div className="danger-zone"><div><strong>Delete this draft</strong><p>Drafts have not changed inventory and can be safely removed.</p></div><form action={deletePurchaseAction}><input type="hidden" name="id" value={purchase.id} /><ConfirmActionButton triggerLabel="Delete draft" title="Delete draft purchase?" description="This draft purchase will be permanently removed from the purchase ledger." confirmLabel="Delete draft" pendingLabel="Deleting…" /></form></div>
       </div>
     </dialog>
   </div>;
 }
 
 function includeCurrent(options: Option[], current: Option | null) { return current && !options.some((row) => row.id === current.id) ? [current, ...options] : options; }
-function ReceiveButton() { const { pending } = useFormStatus(); return <button className="btn btn-soft btn-compact" disabled={pending} onClick={(event) => { if (!window.confirm("Receive this purchase and post it to inventory? It will become locked.")) event.preventDefault(); }}><PackageCheck size={14} />{pending ? "Receiving…" : "Receive"}</button>; }
 function SaveButton() { const { pending } = useFormStatus(); return <button className="btn btn-primary" disabled={pending}><Save size={15} />{pending ? "Saving…" : "Save draft"}</button>; }
-function DeleteButton() { const { pending } = useFormStatus(); return <button className="btn btn-danger" disabled={pending} onClick={(event) => { if (!window.confirm("Permanently delete this draft purchase? This cannot be undone.")) event.preventDefault(); }}><Trash2 size={15} />{pending ? "Deleting…" : "Delete draft"}</button>; }
