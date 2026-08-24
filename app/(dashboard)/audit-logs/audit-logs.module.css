@@ -18,34 +18,43 @@
 .selectControl svg { position: absolute; top: 50%; right: 14px; transform: translateY(-50%); color: var(--brand); pointer-events: none; }
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .tableWrap { overflow-x: auto; }
-.auditTable { min-width: 1120px; table-layout: fixed; font-size: 13px; }
+.auditTable { min-width: 1380px; table-layout: fixed; font-size: 13px; }
 .auditTable th { padding: 17px 20px; border-top: 0; color: #6b7e92; background: #f6f9fc; font-size: 10px; letter-spacing: 1.15px; }
-.auditTable th:nth-child(1) { width: 17%; }
-.auditTable th:nth-child(2) { width: 19%; }
-.auditTable th:nth-child(3) { width: 18%; }
-.auditTable th:nth-child(4) { width: 11%; }
-.auditTable th:nth-child(5) { width: 16%; }
-.auditTable th:nth-child(6) { width: 19%; }
-.auditTable td { height: 86px; padding: 17px 20px; border-top: 1px solid #e3eaf2; white-space: normal; vertical-align: middle; }
+.auditTable th:nth-child(1) { width: 14%; }
+.auditTable th:nth-child(2) { width: 18%; }
+.auditTable th:nth-child(3) { width: 13%; }
+.auditTable th:nth-child(4) { width: 15%; }
+.auditTable th:nth-child(5) { width: 9%; }
+.auditTable th:nth-child(6) { width: 14%; }
+.auditTable th:nth-child(7) { width: 17%; }
+.auditTable td { height: 98px; padding: 18px 20px; border-top: 1px solid #e3eaf2; white-space: normal; vertical-align: middle; }
 .auditTable tbody tr { transition: background .15s ease, box-shadow .15s ease; }
 .auditTable tbody tr:hover { background: #f7fbff; box-shadow: inset 3px 0 var(--brand); }
 .whenCell { color: #31465d; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap !important; }
 .userCell { min-width: 0; display: flex; align-items: center; gap: 11px; }
 .userAvatar { width: 34px; height: 34px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; color: var(--brand); background: #e9f4fd; }
-.userCell div { min-width: 0; display: grid; gap: 4px; }
+.userCell div { min-width: 0; display: grid; gap: 3px; }
 .userCell strong { overflow: hidden; color: var(--ink); text-overflow: ellipsis; font-size: 13px; }
-.userCell small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; font-size: 11px; }
+.userCell span { overflow: hidden; color: var(--brand-dark); text-overflow: ellipsis; font-size: 11px; font-weight: 700; }
+.userCell small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; font-size: 10px; }
+.clientCell { display: table-cell; }
+.clientCell code { display: block; width: fit-content; max-width: 100%; overflow: hidden; padding: 5px 8px; border: 1px solid #d7e7f5; border-radius: 8px; color: #145f97; background: #f0f7fd; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.clientCell small { display: block; margin-top: 6px; color: var(--muted); font-size: 9px; }
 .actionBadge { max-width: 100%; display: inline-flex; align-items: center; padding: 7px 10px; border-radius: 999px; font-size: 9px; font-weight: 850; letter-spacing: .65px; line-height: 1.2; text-transform: uppercase; }
 .actionPrimary { color: #0664a8; background: #e7f3fc; box-shadow: inset 0 0 0 1px #d7ebfa; }
 .actionSoft { color: #245887; background: #eef4fa; box-shadow: inset 0 0 0 1px #dde9f4; }
+.actionCreated { color: #075985; background: #e0f2fe; box-shadow: inset 0 0 0 1px #c8e9fb; }
+.actionChanged { color: #3730a3; background: #eef2ff; box-shadow: inset 0 0 0 1px #dfe4ff; }
 .actionNeutral { color: #56687a; background: #f0f3f6; box-shadow: inset 0 0 0 1px #e2e7ec; }
 .actionDanger { color: #a6323b; background: #fcecef; box-shadow: inset 0 0 0 1px #f7dce1; }
 .entityName { color: #30465d; font-weight: 750; }
 .referenceCell code { display: -webkit-box; overflow: hidden; color: #68798b; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .referenceCell > span, .detailsCell > span { color: #8795a5; }
 .detailList { display: grid; gap: 4px; color: #647589; font-size: 11px; line-height: 1.35; }
-.detailList span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detailList span { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px; overflow-wrap: anywhere; }
 .detailList strong { color: #3e556c; font-weight: 750; }
+.detailList del { color: #9a5a61; text-decoration-thickness: 1px; }
+.detailList b { color: var(--brand); font-weight: 800; }
 .emptyState { border-top: 1px solid var(--line); }
 .pagination { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 24px; border-top: 1px solid var(--line); background: #fbfdff; }
 .pagination > span { color: var(--muted); font-size: 12px; font-weight: 650; }
@@ -78,6 +87,7 @@
   .auditTable tbody tr:hover { background: #fff; box-shadow: 0 7px 18px #0a4f850c; }
   .auditTable td { height: auto; display: grid; gap: 6px; padding: 0; border: 0; }
   .auditTable td::before { content: attr(data-label); color: #8391a1; font-size: 8px; font-weight: 850; letter-spacing: 1px; text-transform: uppercase; }
+  .auditTable .clientCell { display: grid; }
   .auditTable .referenceCell, .auditTable .detailsCell { grid-column: 1 / -1; padding-top: 10px; border-top: 1px solid #e7edf3; }
   .whenCell { white-space: normal !important; }
   .userAvatar { display: none; }

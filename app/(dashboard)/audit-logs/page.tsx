@@ -17,7 +17,9 @@ function readableLabel(value: string) {
 function actionTone(action: string) {
   if (/(FAILED|ERROR|REJECTED|BLOCKED|DELETED|CANCELLED)/.test(action)) return styles.actionDanger;
   if (/(LOGOUT|EXPIRED)/.test(action)) return styles.actionNeutral;
-  if (/(LOGIN|SUCCESS|CREATED|RECEIVED|UPDATED|CHANGED|COMPLETED)/.test(action)) return styles.actionPrimary;
+  if (/(UPDATED|CHANGED|ADJUSTED|REPRINTED)/.test(action)) return styles.actionChanged;
+  if (/(CREATED|RECEIVED|COMPLETED|SUCCESS)/.test(action)) return styles.actionCreated;
+  if (/(LOGIN|AUTH|SESSION)/.test(action)) return styles.actionPrimary;
   return styles.actionSoft;
 }
 
@@ -28,9 +30,26 @@ function displayValue(key: string, value: unknown) {
   return JSON.stringify(value);
 }
 
-function detailEntries(value: unknown) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
-  return Object.entries(value as Record<string, unknown>).slice(0, 3);
+function objectEntries(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function detailEntries(oldValue: unknown, newValue: unknown) {
+  const before = objectEntries(oldValue);
+  const after = objectEntries(newValue);
+  return [...new Set([...Object.keys(after), ...Object.keys(before)])].slice(0, 6).map((key) => ({
+    key,
+    before: before[key],
+    after: after[key],
+    changed: Object.hasOwn(before, key) && (!Object.hasOwn(after, key) || JSON.stringify(before[key]) !== JSON.stringify(after[key])),
+  }));
+}
+
+function clientDescription(userAgent: string | null) {
+  if (!userAgent) return "Device not recorded";
+  const browser = userAgent.includes("Edg/") ? "Edge" : userAgent.includes("Chrome/") ? "Chrome" : userAgent.includes("Firefox/") ? "Firefox" : userAgent.includes("Safari/") ? "Safari" : "Web client";
+  const device = /iPhone|iPad/.test(userAgent) ? "iOS" : userAgent.includes("Android") ? "Android" : userAgent.includes("Mac OS") ? "macOS" : userAgent.includes("Windows") ? "Windows" : userAgent.includes("Linux") ? "Linux" : null;
+  return device ? `${browser} · ${device}` : browser;
 }
 
 function pageHref(action: string, entity: string, page: number) {
@@ -74,17 +93,17 @@ export default async function AuditLogsPage({ searchParams }: { searchParams: Pr
       {!ledger.rows.length ? <div className={styles.emptyState}><Empty message="No audit events match these filters." /></div> :
         <div className={styles.tableWrap}>
           <table className={styles.auditTable}>
-            <thead><tr><th>When</th><th>User</th><th>Action</th><th>Entity</th><th>Reference</th><th>Details</th></tr></thead>
+            <thead><tr><th>When</th><th>User account</th><th>IP address</th><th>Action</th><th>Entity</th><th>Reference</th><th>Details</th></tr></thead>
             <tbody>{ledger.rows.map((log) => {
-              const details = detailEntries(log.newValues);
-              const userLabel = log.user?.username ? `@${log.user.username}` : log.user?.email ?? "Automated event";
+              const details = detailEntries(log.oldValues, log.newValues);
               return <tr key={log.id}>
                 <td className={styles.whenCell} data-label="When"><time dateTime={log.createdAt}>{formatDateTime(log.createdAt)}</time></td>
-                <td data-label="User"><div className={styles.userCell}><span className={styles.userAvatar}><UserRound size={16} /></span><div><strong>{log.user?.fullName ?? "System"}</strong><small>{userLabel}</small></div></div></td>
+                <td data-label="User account"><div className={styles.userCell}><span className={styles.userAvatar}><UserRound size={16} /></span><div><strong>{log.user?.fullName ?? "System"}</strong>{log.user?.username ? <span>@{log.user.username}</span> : <span>Automated event</span>}{log.user?.email && <small>{log.user.email}</small>}</div></div></td>
+                <td className={styles.clientCell} data-label="IP address"><code>{log.ipAddress ?? "Not captured"}</code><small>{clientDescription(log.userAgent)}</small></td>
                 <td data-label="Action"><span className={`${styles.actionBadge} ${actionTone(log.action)}`}>{readableLabel(log.action)}</span></td>
                 <td data-label="Entity"><span className={styles.entityName}>{readableLabel(log.entityType)}</span></td>
                 <td className={styles.referenceCell} data-label="Reference">{log.entityId ? <code title={log.entityId}>{log.entityId}</code> : <span>—</span>}</td>
-                <td className={styles.detailsCell} data-label="Details">{details.length ? <div className={styles.detailList}>{details.map(([key, value]) => <span key={key}><strong>{readableLabel(key)}:</strong> {displayValue(key, value)}</span>)}</div> : <span>—</span>}</td>
+                <td className={styles.detailsCell} data-label="Details">{details.length ? <div className={styles.detailList}>{details.map(({ key, before, after, changed }) => <span key={key}><strong>{readableLabel(key)}:</strong> {changed && <><del>{displayValue(key, before)}</del><b aria-hidden="true">→</b></>}{displayValue(key, after)}</span>)}</div> : <span>—</span>}</td>
               </tr>;
             })}</tbody>
           </table>
