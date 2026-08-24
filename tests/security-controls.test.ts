@@ -17,6 +17,7 @@ import { auditLogFilterInput, issueCloseInput, issueInput, loginInput, purchaseI
 import { isEligibleSupervisor } from "@/modules/business-rules";
 import { LOGIN_BLOCK_MS, LOGIN_IP_MAX_ATTEMPTS, LOGIN_WINDOW_MS, nextLoginThrottle } from "@/lib/login-throttle-policy";
 import { formatSseComment, formatSseEvent } from "@/lib/sse";
+import { nextSessionExpiresAt, sessionAbsoluteExpiresAt, SESSION_ABSOLUTE_TTL_SECONDS, SESSION_IDLE_TTL_SECONDS, shouldRenewSession } from "@/lib/session-policy";
 
 function mutationRequest(origin?: string, extraHeaders: Record<string, string> = {}) {
   return new Request("https://swiftwash.example/api/login", {
@@ -125,6 +126,24 @@ describe("session and authentication controls", () => {
     expect(isUsableSessionRecord(new Date(now + 1_000), true, now)).toBe(true);
     expect(isUsableSessionRecord(new Date(now - 1), true, now)).toBe(false);
     expect(isUsableSessionRecord(new Date(now + 1_000), false, now)).toBe(false);
+  });
+
+  it("renews active sessions without exceeding the absolute lifetime", () => {
+    const createdAt = new Date("2026-08-01T08:00:00.000Z");
+    const absoluteExpiresAt = sessionAbsoluteExpiresAt(createdAt);
+    expect(absoluteExpiresAt.getTime()).toBe(createdAt.getTime() + SESSION_ABSOLUTE_TTL_SECONDS * 1_000);
+    const normalRenewalAt = createdAt.getTime() + 10 * 60 * 1_000;
+    expect(nextSessionExpiresAt(createdAt, normalRenewalAt).getTime()).toBe(normalRenewalAt + SESSION_IDLE_TTL_SECONDS * 1_000);
+    const nearAbsoluteLimit = absoluteExpiresAt.getTime() - 2 * 60 * 1_000;
+    expect(nextSessionExpiresAt(createdAt, nearAbsoluteLimit).getTime()).toBe(absoluteExpiresAt.getTime());
+    expect(isUsableSessionRecord(new Date(absoluteExpiresAt.getTime() + 60_000), true, absoluteExpiresAt.getTime(), createdAt)).toBe(false);
+  });
+
+  it("permits rotation only inside the renewal window", () => {
+    const now = Date.now();
+    expect(shouldRenewSession(new Date(now + 4 * 60 * 1_000), now)).toBe(true);
+    expect(shouldRenewSession(new Date(now + 10 * 60 * 1_000), now)).toBe(false);
+    expect(shouldRenewSession(new Date(now - 1), now)).toBe(false);
   });
 
   it("blocks a username on the fifth failed attempt and resets after the window", () => {
