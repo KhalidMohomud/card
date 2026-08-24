@@ -202,6 +202,11 @@ describe("injection and validation controls", () => {
 
   it("allows only HTTP(S) logo URLs", () => {
     const settings = { businessName: "SwiftWash", phone: "", email: "", address: "", currencyCode: "USD", receiptFooter: "Thank you" };
+    expect(() => settingsInput.safeParse({ ...settings, logoUrl: "" })).not.toThrow();
+    expect(settingsInput.parse({ ...settings, logoUrl: "" }).logoUrl).toBe("");
+    expect(settingsInput.parse({ ...settings, logoUrl: "   " }).logoUrl).toBe("");
+    expect(settingsInput.safeParse({ ...settings, logoUrl: "://invalid" }).success).toBe(false);
+    expect(settingsInput.safeParse({ ...settings, logoUrl: "ftp://cdn.example/logo.png" }).success).toBe(false);
     expect(settingsInput.safeParse({ ...settings, logoUrl: "javascript:alert(1)" }).success).toBe(false);
     expect(settingsInput.safeParse({ ...settings, logoUrl: "https://cdn.example/logo.png" }).success).toBe(true);
   });

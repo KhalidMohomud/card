@@ -38,6 +38,15 @@ function validateReportDateRange(value: { from?: string; to?: string }, context:
   }
 }
 
+const optionalHttpUrl = z.string().trim().max(2_048).refine((value) => {
+  if (!value) return true;
+  try {
+    return ["http:", "https:"].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}, "Use a valid HTTP or HTTPS URL");
+
 export const cuidInput = z.string().cuid();
 export const positiveIntegerInput = z.coerce.number().int().positive().max(2_147_483_647);
 export const pageInput = z.coerce.number().int().min(1).max(10_000).catch(1);
@@ -167,5 +176,5 @@ function uniqueItemLines(lines: { inventoryItemId: string }[], context: z.Refine
 export const settingsInput = z.object({
   businessName: requiredText, phone: z.string().trim().max(40), email: z.string().email().or(z.literal("")),
   address: z.string().trim().max(240), currencyCode: z.string().trim().length(3).toUpperCase(), receiptFooter: requiredText,
-  logoUrl: z.string().url().refine((value) => ["http:", "https:"].includes(new URL(value).protocol), "Use an HTTP or HTTPS URL").optional().or(z.literal("")),
+  logoUrl: optionalHttpUrl.optional().default(""),
 });

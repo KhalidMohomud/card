@@ -380,7 +380,10 @@ export async function cancelIssueAction(form: FormData) {
 }
 
 export async function updateSettingsAction(form: FormData) {
-  const admin = await requireAdmin(); const data = settingsInput.parse({ businessName: value(form, "businessName"), phone: value(form, "phone"), email: value(form, "email"), address: value(form, "address"), currencyCode: value(form, "currencyCode"), receiptFooter: value(form, "receiptFooter"), logoUrl: value(form, "logoUrl") });
+  const admin = await requireAdmin();
+  const parsed = settingsInput.safeParse({ businessName: value(form, "businessName"), phone: value(form, "phone"), email: value(form, "email"), address: value(form, "address"), currencyCode: value(form, "currencyCode"), receiptFooter: value(form, "receiptFooter"), logoUrl: value(form, "logoUrl") });
+  if (!parsed.success) redirect("/settings?error=Check+the+settings+fields.+Logo+must+be+a+valid+HTTP+or+HTTPS+URL");
+  const data = parsed.data;
   const old = await prisma.businessSetting.findUnique({ where: { id: "singleton" } });
   const settings = await prisma.businessSetting.upsert({ where: { id: "singleton" }, update: { ...data, logoUrl: data.logoUrl || null }, create: { id: "singleton", ...data, logoUrl: data.logoUrl || null } });
   await prisma.auditLog.create({ data: { userId: admin.id, action: "SETTINGS_UPDATED", entityType: "BusinessSetting", entityId: settings.id, oldValues: old ? { businessName: old.businessName } : undefined, newValues: { businessName: settings.businessName } } });
