@@ -9,10 +9,12 @@ import { formatMoney } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { canAccessReceipt } from "@/lib/permissions";
+import { positiveIntegerInput } from "@/lib/validation";
 
 export default async function ReceiptPrintPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ autoprint?: string }> }) {
-  const user = await requireUser(); const { id } = await params; const query = await searchParams; const receiptId = Number(id);
-  if (!Number.isInteger(receiptId)) notFound();
+  const user = await requireUser(); const { id } = await params; const query = await searchParams; const parsedReceiptId = positiveIntegerInput.safeParse(id);
+  if (!parsedReceiptId.success) notFound();
+  const receiptId = parsedReceiptId.data;
   const [receiptRow, catalog] = await Promise.all([
     prisma.$queryRaw<{ id: number; createdByUserId: string; issuedAt: Date; serviceNameSnapshot: string; servicePriceSnapshot: Prisma.Decimal; status: ReceiptStatus; paymentReference: string | null; printCount: number; paymentMethodName: string; supervisorName: string }[]>`
       SELECT r.id, r."createdByUserId", r."issuedAt", r."serviceNameSnapshot",

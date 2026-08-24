@@ -6,10 +6,11 @@ import { getCatalogData, getExpenseLedger, getReferenceData } from "@/lib/cached
 import { businessDateInputValue, formatDateTime } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { requireManagement } from "@/lib/session";
+import { pageInput } from "@/lib/validation";
 
 export const metadata = { title: "Expenses" };
 export default async function ExpensesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  await requireManagement(); const query = await searchParams; const page = Math.max(Number(query.page) || 1, 1);
+  await requireManagement(); const query = await searchParams; const page = pageInput.parse(query.page ?? 1);
   const [ledger, catalog, references] = await Promise.all([getExpenseLedger(page), getCatalogData(), getReferenceData()]);
   const expenses = ledger.rows, total = ledger.total;
   const categories = references.categories, supervisors = references.supervisors.filter((row) => row.isActive), methods = catalog.methods.filter((row) => row.isActive), settings = catalog.settings;

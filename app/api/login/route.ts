@@ -5,7 +5,7 @@ import { createDatabaseSession, getClientIp, getRawSessionToken, revokeSessionTo
 import { clearLoginFailures, loginBlockSeconds, loginThrottleKeys, registerLoginAttempt } from "@/lib/login-throttle";
 import { verifyPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
-import { hasJsonContentType, isSameOriginMutation } from "@/lib/request-security";
+import { hasJsonContentType, isSameOriginMutation, readLimitedJson, RequestBodyTooLargeError } from "@/lib/request-security";
 import { loginInput } from "@/lib/validation";
 
 const DUMMY_PASSWORD_HASH = `${"0".repeat(32)}:${"0".repeat(128)}`;
@@ -15,10 +15,25 @@ function noStore(response: NextResponse) { response.headers.set("Cache-Control",
 export async function POST(request: Request) {
   if (!isSameOriginMutation(request)) return noStore(NextResponse.json({ message: "Request rejected." }, { status: 403 }));
   if (!hasJsonContentType(request)) return noStore(NextResponse.json({ message: "Invalid request." }, { status: 415 }));
-  let username = "unknown";
+  let raw: unknown;
   try {
-    const raw: unknown = await request.json();
-    const data = loginInput.parse(raw); username = data.username;
+    raw = await readLimitedJson(request, 2 * 1024);
+  } catch (error) {
+    after(() => audit({ action: "LOGIN_REJECTED", entityType: "User", newValues: { reason: error instanceof RequestBodyTooLargeError ? "BODY_TOO_LARGE" : "MALFORMED_JSON" } }).catch(() => undefined));
+    return noStore(NextResponse.json(
+      { message: error instanceof RequestBodyTooLargeError ? "Request body is too large." : "Invalid request." },
+      { status: error instanceof RequestBodyTooLargeError ? 413 : 400 },
+    ));
+  }
+  const parsed = loginInput.safeParse(raw);
+  if (!parsed.success) {
+    after(() => audit({ action: "LOGIN_REJECTED", entityType: "User", newValues: { reason: "INVALID_INPUT" } }).catch(() => undefined));
+    return noStore(NextResponse.json({ message: "Invalid request." }, { status: 400 }));
+  }
+
+  const data = parsed.data;
+  const username = data.username;
+  try {
     const keys = loginThrottleKeys(username, getClientIp(request));
     const retryAfter = await loginBlockSeconds(keys);
     if (retryAfter) {
@@ -54,9 +69,10 @@ export async function POST(request: Request) {
       prisma.loginThrottle.deleteMany({ where: { expiresAt: { lte: new Date() } } }),
     ]).then(() => undefined).catch(() => undefined));
     return noStore(response);
-  } catch {
-    after(() => audit({ action: "LOGIN_FAILED", entityType: "User", newValues: { username, reason: "INVALID_REQUEST" } }).catch(() => undefined));
-    return noStore(NextResponse.json({ message: "Invalid username or password." }, { status: 401 }));
+  } catch (error) {
+    console.error("Login request failed", { error: error instanceof Error ? error.name : "UnknownError" });
+    after(() => audit({ action: "LOGIN_ERROR", entityType: "User", newValues: { username, reason: "INTERNAL_ERROR" } }).catch(() => undefined));
+    return noStore(NextResponse.json({ message: "Sign in is temporarily unavailable. Try again." }, { status: 503 }));
   }
 }
 

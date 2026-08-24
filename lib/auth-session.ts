@@ -3,13 +3,14 @@ import "server-only";
 import { cookies } from "next/headers";
 import type { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { clientIpFromHeaders } from "@/lib/request-security";
 import { createSessionToken, isUsableSessionRecord, sessionTokenDigest } from "@/lib/session-token";
 
 export const SESSION_TTL_SECONDS = 5 * 60;
 export const SESSION_COOKIE_NAME = "swiftwash_session";
 
 export function getClientIp(request: Request) {
-  return request.headers.get("x-real-ip")?.trim() || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  return clientIpFromHeaders(request.headers);
 }
 
 export async function createDatabaseSession(userId: string, request: Request) {

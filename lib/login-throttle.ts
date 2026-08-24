@@ -7,8 +7,8 @@ import { LOGIN_BLOCK_MS, LOGIN_WINDOW_MS, nextLoginThrottle } from "@/lib/login-
 
 function digest(value: string) { return createHash("sha256").update(value).digest("hex"); }
 
-export function loginThrottleKeys(username: string, ipAddress: string) {
-  return [`username:${digest(username)}`, `ip:${digest(ipAddress)}`];
+export function loginThrottleKeys(username: string, ipAddress: string | null) {
+  return [`username:${digest(username)}`, ...(ipAddress ? [`ip:${digest(ipAddress)}`] : [])];
 }
 
 export async function loginBlockSeconds(keys: string[]) {

@@ -26,9 +26,21 @@ const optionalCalendarDate = z.union([calendarDate, z.literal("")]).optional().t
 function validateDateOrder(value: { from?: string; to?: string }, context: z.RefinementCtx) {
   if (value.from && value.to && value.from > value.to) context.addIssue({ code: "custom", path: ["to"], message: "End date must not be before start date" });
 }
+function validateReportDateRange(value: { from?: string; to?: string }, context: z.RefinementCtx) {
+  validateDateOrder(value, context);
+  if (!value.from || !value.to || value.from > value.to) return;
+  const toUtcDay = (date: string) => {
+    const [year, month, day] = date.split("-").map(Number);
+    return Date.UTC(year, month - 1, day) / 86_400_000;
+  };
+  if (toUtcDay(value.to) - toUtcDay(value.from) > 366) {
+    context.addIssue({ code: "custom", path: ["to"], message: "Report range cannot exceed 366 days" });
+  }
+}
 
 export const cuidInput = z.string().cuid();
 export const positiveIntegerInput = z.coerce.number().int().positive().max(2_147_483_647);
+export const pageInput = z.coerce.number().int().min(1).max(10_000).catch(1);
 export const booleanInput = z.union([z.boolean(), z.enum(["true", "false"]).transform((value) => value === "true")]);
 export const loginInput = z.object({
   username: z.string().trim().transform((value) => value.replace(/^@+/, "").toLowerCase()).pipe(z.string().min(3).max(30).regex(/^[a-z0-9_.]+$/)),
@@ -37,7 +49,7 @@ export const loginInput = z.object({
 export const receiptFilterInput = z.object({
   q: z.string().trim().max(120).optional().default(""),
   status: z.union([z.enum(["COMPLETED", "CANCELLED"]), z.literal("")]).optional().transform((value) => value || undefined),
-  page: z.coerce.number().int().min(1).max(10_000).optional().default(1),
+  page: pageInput.optional().default(1),
   from: optionalCalendarDate,
   to: optionalCalendarDate,
 }).superRefine(validateDateOrder);
@@ -46,7 +58,7 @@ export const reportFilterInput = z.object({
   supervisorId: z.union([z.string().cuid(), z.literal("")]).optional().transform((value) => value || undefined),
   from: optionalCalendarDate,
   to: optionalCalendarDate,
-}).superRefine(validateDateOrder);
+}).superRefine(validateReportDateRange);
 
 export const receiptInput = z.object({
   serviceId: z.string().cuid(),
@@ -134,9 +146,14 @@ export const inventoryIssueFilterInput = z.object({
   status: z.union([z.enum(["ISSUED", "CLOSED", "CANCELLED"]), z.literal("")]).optional().transform((value) => value || undefined),
   supervisorId: z.union([z.string().cuid(), z.literal("")]).optional().transform((value) => value || undefined),
   from: optionalCalendarDate, to: optionalCalendarDate,
-  page: z.coerce.number().int().min(1).max(10_000).optional().default(1),
+  page: pageInput.optional().default(1),
 }).superRefine(validateDateOrder);
-export const purchaseFilterInput = z.object({ q: z.string().trim().max(120).optional().default(""), page: z.coerce.number().int().min(1).max(10_000).optional().default(1) });
+export const purchaseFilterInput = z.object({ q: z.string().trim().max(120).optional().default(""), page: pageInput.optional().default(1) });
+export const auditLogFilterInput = z.object({
+  action: z.string().trim().max(120).optional().default(""),
+  entity: z.string().trim().max(120).optional().default(""),
+  page: pageInput.optional().default(1),
+});
 export const adjustmentInput = z.object({ inventoryItemId: z.string().cuid(), direction: z.enum(["IN", "OUT"]), quantity, reason: z.string().trim().min(5).max(500) });
 export const stocktakeInput = z.object({ inventoryItemId: z.string().cuid(), countedAvailable: nonnegativeQuantity, reason: z.string().trim().min(5).max(500) });
 

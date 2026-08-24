@@ -4,9 +4,16 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { createCsv } from "@/lib/csv";
 import { canAccessReceipt } from "@/lib/permissions";
-import { hasJsonContentType, isSameOriginMutation } from "@/lib/request-security";
+import {
+  clientIpFromHeaders,
+  hasJsonContentType,
+  isSameOriginMutation,
+  readLimitedJson,
+  RequestBodyTooLargeError,
+  trustsProxyHeaders,
+} from "@/lib/request-security";
 import { createSessionToken, isUsableSessionRecord, sessionTokenDigest } from "@/lib/session-token";
-import { issueCloseInput, issueInput, loginInput, purchaseInput, receiptFilterInput, reportFilterInput, settingsInput, stocktakeInput, supervisorInput } from "@/lib/validation";
+import { auditLogFilterInput, issueCloseInput, issueInput, loginInput, purchaseInput, receiptFilterInput, reportFilterInput, settingsInput, stocktakeInput, supervisorInput } from "@/lib/validation";
 import { isEligibleSupervisor } from "@/modules/business-rules";
 import { LOGIN_BLOCK_MS, nextLoginThrottle } from "@/lib/login-throttle-policy";
 
@@ -31,7 +38,7 @@ describe("CSRF and request-boundary controls", () => {
     expect(isSameOriginMutation(mutationRequest("https://swiftwash.example", { "sec-fetch-site": "cross-site" }))).toBe(false);
   });
 
-  it("handles an HTTPS reverse proxy without trusting comma-appended values", () => {
+  it("uses forwarded origin data only for an explicitly trusted proxy", () => {
     const request = new Request("http://internal:3000/api/login", {
       method: "POST",
       headers: {
@@ -41,12 +48,52 @@ describe("CSRF and request-boundary controls", () => {
         "x-forwarded-proto": "https, http",
       },
     });
-    expect(isSameOriginMutation(request)).toBe(true);
+    expect(isSameOriginMutation(request)).toBe(false);
+    expect(isSameOriginMutation(request, true)).toBe(true);
+  });
+
+  it("does not allow untrusted forwarding headers to redefine the application origin", () => {
+    const request = mutationRequest("https://evil.example", {
+      "x-forwarded-host": "evil.example",
+      "x-forwarded-proto": "https",
+    });
+    expect(isSameOriginMutation(request)).toBe(false);
+  });
+
+  it("accepts validated client IPs only from a trusted proxy", () => {
+    const headers = new Headers({ "x-forwarded-for": "203.0.113.10, 10.0.0.5" });
+    expect(clientIpFromHeaders(headers)).toBeNull();
+    expect(clientIpFromHeaders(headers, true)).toBe("203.0.113.10");
+    expect(clientIpFromHeaders(new Headers({ "x-forwarded-for": "not-an-ip" }), true)).toBeNull();
+    expect(trustsProxyHeaders({ VERCEL: "1" } as NodeJS.ProcessEnv)).toBe(true);
+    expect(trustsProxyHeaders({ TRUST_PROXY_HEADERS: "true" } as NodeJS.ProcessEnv)).toBe(true);
+    expect(trustsProxyHeaders({} as NodeJS.ProcessEnv)).toBe(false);
   });
 
   it("requires JSON for JSON mutation endpoints", () => {
     expect(hasJsonContentType(mutationRequest("https://swiftwash.example"))).toBe(true);
     expect(hasJsonContentType(mutationRequest("https://swiftwash.example", { "content-type": "text/plain" }))).toBe(false);
+  });
+
+  it("rejects oversized JSON by declared or streamed byte length", async () => {
+    const valid = new Request("https://swiftwash.example/api/login", {
+      method: "POST",
+      body: JSON.stringify({ username: "admin" }),
+    });
+    await expect(readLimitedJson(valid, 128)).resolves.toEqual({ username: "admin" });
+
+    const declaredTooLarge = new Request("https://swiftwash.example/api/login", {
+      method: "POST",
+      headers: { "content-length": "999" },
+      body: "{}",
+    });
+    await expect(readLimitedJson(declaredTooLarge, 16)).rejects.toBeInstanceOf(RequestBodyTooLargeError);
+
+    const streamedTooLarge = new Request("https://swiftwash.example/api/login", {
+      method: "POST",
+      body: JSON.stringify({ value: "x".repeat(100) }),
+    });
+    await expect(readLimitedJson(streamedTooLarge, 16)).rejects.toBeInstanceOf(RequestBodyTooLargeError);
   });
 });
 
@@ -127,6 +174,9 @@ describe("injection and validation controls", () => {
     expect(reportFilterInput.safeParse({ type: "../../etc/passwd" }).success).toBe(false);
     expect(reportFilterInput.safeParse({ from: "2026-02-30", to: "2026-03-01" }).success).toBe(false);
     expect(reportFilterInput.safeParse({ from: "2026-08-02", to: "2026-08-01" }).success).toBe(false);
+    expect(reportFilterInput.safeParse({ from: "2025-01-01", to: "2026-08-01" }).success).toBe(false);
+    expect(auditLogFilterInput.safeParse({ action: "x".repeat(121) }).success).toBe(false);
+    expect(auditLogFilterInput.parse({ page: "999999999" }).page).toBe(1);
     const basePurchase = { supplierId: "cm12345678901234567890123", purchaseDate: new Date(), paymentStatus: "PAID" };
     expect(purchaseInput.safeParse({ ...basePurchase, items: [{ inventoryItemId: "cm12345678901234567890124", quantity: "1", unitCost: "1" }] }).success).toBe(true);
     expect(purchaseInput.safeParse({ ...basePurchase, items: [{ inventoryItemId: "cm12345678901234567890124", quantity: "1", unitCost: "0" }] }).success).toBe(false);

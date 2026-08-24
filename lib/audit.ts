@@ -2,6 +2,7 @@ import "server-only";
 import { headers } from "next/headers";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { clientIpFromHeaders } from "@/lib/request-security";
 
 type AuditInput = {
   userId?: string | null;
@@ -15,7 +16,7 @@ type AuditInput = {
 export async function requestMetadata() {
   const values = await headers();
   return {
-    ipAddress: values.get("x-forwarded-for")?.split(",")[0]?.trim() ?? values.get("x-real-ip"),
+    ipAddress: clientIpFromHeaders(values),
     userAgent: values.get("user-agent"),
   };
 }
