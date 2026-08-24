@@ -1,9 +1,10 @@
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
-import { Droplets, ShieldCheck } from "lucide-react";
 import { LoginForm } from "@/components/login-form";
 import { getDashboardSnapshot, getReferenceData } from "@/lib/cached-data";
 import { getCurrentUser } from "@/lib/session";
+import companyLogo from "@/logo.jpeg";
 
 export const metadata = { title: "Sign in" };
 export default async function LoginPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
@@ -14,31 +15,18 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   // this completes while staff enter credentials and never delays the page.
   after(() => Promise.all([getDashboardSnapshot(), getReferenceData()]).then(() => undefined).catch(() => undefined));
   return <main className="login-shell">
-    <section className="login-art"><div className="brand" style={{ border: 0, padding: 0 }}>
-      <span className="brand-mark">
-        <Droplets />
-      </span>
-      <span>
-        <strong>Car</strong>
-        <small>Operations POS</small>
-      </span>
-    </div>
-      <div>
-        <span className="eyebrow" style={{ color: "#9bd5ff" }}>Every wash.</span>
-        <h1>Clean cars.<br />Clear numbers.</h1>
-      </div><small style={{ color: "#a7cbe8" }}>Protected by secure, server-side sessions</small>
-    </section>
-    <section className="login-panel">
-      <div className="login-card">
-        <span className="stat-icon" style={{ marginBottom: 24 }}>
-          <ShieldCheck size={20} />
-        </span>
-        <h2>Welcome back</h2>
-        <p>Sign in with your staff username to continue.</p>
-        {/* {query.expired && <div className="alert alert-error">Your five-minute session expired. Please sign in again.</div>} */}
-        {query.passwordChanged && <div className="alert alert-success">Password changed successfully. Sign in with your new password.</div>}
-        <LoginForm />
-      </div>
+    <section className="login-card" aria-labelledby="login-title">
+      <header className="login-card-head">
+        <div className="login-logo-frame">
+          <Image className="login-logo" src={companyLogo} alt="EcofriendLC" priority />
+        </div>
+        <p className="login-system-name">EcofriendLC POS</p>
+        <h1 id="login-title">Welcome to EcofriendLC</h1>
+        <p className="login-intro">Sign in to your account to manage car wash operations.</p>
+      </header>
+      {query.passwordChanged && <div className="alert alert-success">Password changed successfully. Sign in with your new password.</div>}
+      <LoginForm />
+      <footer className="login-card-footer">Need an account? <strong>Contact Administrator</strong></footer>
     </section>
   </main>;
 }

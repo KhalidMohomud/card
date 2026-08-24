@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, EyeOff, LockKeyhole, UserRound } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, LockKeyhole, UserRound } from "lucide-react";
 
 export function LoginForm() {
   const [error, setError] = useState(""); const [pending, setPending] = useState(false); const [showPassword, setShowPassword] = useState(false);
@@ -29,21 +29,21 @@ export function LoginForm() {
 
     }
   }
-  return <form onSubmit={submit}>
+  return <form className="login-form" onSubmit={submit}>
     {error && <div className="alert alert-error" role="alert">{error}
     </div>}
     <div className="field">
       <label htmlFor="username">Username</label>
-      <div style={{ position: "relative" }}>
-        <UserRound size={18} style={{ position: "absolute", left: 14, top: 16, color: "#71849a" }} />
-        <input className="input" style={{ paddingLeft: 43 }} id="username" name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="ayuub or @ayuub" required />
+      <div className="login-input-wrap">
+        <UserRound className="login-input-icon" size={20} aria-hidden="true" />
+        <input className="input" id="username" name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="Enter your username" required />
       </div>
     </div>
     <div className="field">
       <label htmlFor="password">Password</label>
-      <div style={{ position: "relative" }}>
-        <LockKeyhole size={18} style={{ position: "absolute", left: 14, top: 16, color: "#71849a" }} />
-        <input className="input" style={{ paddingLeft: 43, paddingRight: 46 }} id="password" name="password" type={showPassword ? "text" : "password"} maxLength={128} autoComplete="current-password" required />
+      <div className="login-input-wrap">
+        <LockKeyhole className="login-input-icon" size={20} aria-hidden="true" />
+        <input className="input" id="password" name="password" type={showPassword ? "text" : "password"} maxLength={128} autoComplete="current-password" placeholder="Enter your password" required />
         <button className="password-visibility" type="button" aria-label={showPassword ? "Hide password" : "Show password"}
           aria-pressed={showPassword} onClick={() => setShowPassword((visible) => !visible)}>{showPassword ?
             <EyeOff size={18} /> : <Eye size={18} />}
@@ -51,7 +51,10 @@ export function LoginForm() {
       </div>
 
     </div>
-    <button className="btn btn-primary btn-block" style={{ minHeight: 50, marginTop: 10 }} disabled={pending}>{pending ? "Signing in…" : "Sign in"}</button>
+    <button className="btn btn-primary btn-block login-submit" disabled={pending}>
+      <span>{pending ? "Signing in…" : "Sign in"}</span>
+      {!pending && <ArrowRight size={20} aria-hidden="true" />}
+    </button>
 
   </form>;
 }
