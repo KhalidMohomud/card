@@ -1,9 +1,9 @@
 import "server-only";
 import { Prisma, type InventoryItemType } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { prisma, type AppTransactionClient } from "@/lib/prisma";
 import { movementBalance } from "@/modules/business-rules";
 
-type Db = Prisma.TransactionClient | typeof prisma;
+type Db = AppTransactionClient | typeof prisma;
 
 type StockItem = { id: string; type: InventoryItemType };
 

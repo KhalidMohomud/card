@@ -65,9 +65,10 @@ describe("CSRF and request-boundary controls", () => {
     expect(clientIpFromHeaders(headers)).toBeNull();
     expect(clientIpFromHeaders(headers, true)).toBe("203.0.113.10");
     expect(clientIpFromHeaders(new Headers({ "x-forwarded-for": "not-an-ip" }), true)).toBeNull();
-    expect(trustsProxyHeaders({ VERCEL: "1" } as NodeJS.ProcessEnv)).toBe(true);
-    expect(trustsProxyHeaders({ TRUST_PROXY_HEADERS: "true" } as NodeJS.ProcessEnv)).toBe(true);
-    expect(trustsProxyHeaders({} as NodeJS.ProcessEnv)).toBe(false);
+    expect(trustsProxyHeaders({ VERCEL: "1" })).toBe(true);
+    expect(trustsProxyHeaders({ NODE_ENV: "development" })).toBe(true);
+    expect(trustsProxyHeaders({ TRUST_PROXY_HEADERS: "true" })).toBe(true);
+    expect(trustsProxyHeaders({})).toBe(false);
   });
 
   it("requires JSON for JSON mutation endpoints", () => {

@@ -14,8 +14,10 @@ function firstForwardedValue(value: string | null) {
   return value?.split(",", 1)[0]?.trim() || null;
 }
 
-export function trustsProxyHeaders(env: NodeJS.ProcessEnv = process.env) {
-  return env.VERCEL === "1" || env.TRUST_PROXY_HEADERS === "true";
+type ProxyEnvironment = { NODE_ENV?: string; VERCEL?: string; TRUST_PROXY_HEADERS?: string };
+
+export function trustsProxyHeaders(env: ProxyEnvironment = process.env) {
+  return env.NODE_ENV === "development" || env.VERCEL === "1" || env.TRUST_PROXY_HEADERS === "true";
 }
 
 export function clientIpFromHeaders(headers: Pick<Headers, "get">, trustProxy = trustsProxyHeaders()) {

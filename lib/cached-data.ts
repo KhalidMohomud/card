@@ -217,7 +217,7 @@ const getAuditLedgerForQuery = unstable_cache(async (action: string, entity: str
   const take = 50;
   const where: Prisma.AuditLogWhereInput = { ...(action ? { action: { contains: action, mode: "insensitive" } } : {}), ...(entity ? { entityType: { contains: entity, mode: "insensitive" } } : {}) };
   const [rows, total, actionOptions, entityOptions] = await Promise.all([
-    prisma.auditLog.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * take, take, select: { id: true, createdAt: true, action: true, entityType: true, entityId: true, oldValues: true, newValues: true, ipAddress: true, userAgent: true, user: { select: { fullName: true, username: true, email: true } } } }),
+    prisma.auditLog.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * take, take, select: { id: true, createdAt: true, action: true, entityType: true, entityId: true, oldValues: true, newValues: true, ipAddress: true, userAgent: true, user: { select: { fullName: true, username: true } } } }),
     prisma.auditLog.count({ where }),
     prisma.auditLog.findMany({ distinct: ["action"], orderBy: { action: "asc" }, select: { action: true } }),
     prisma.auditLog.findMany({ distinct: ["entityType"], orderBy: { entityType: "asc" }, select: { entityType: true } }),
@@ -228,7 +228,7 @@ const getAuditLedgerForQuery = unstable_cache(async (action: string, entity: str
     entities: entityOptions.map((option) => option.entityType),
     rows: rows.map((row) => ({ id: row.id, createdAt: row.createdAt.toISOString(), action: row.action, entityType: row.entityType, entityId: row.entityId, oldValues: row.oldValues, newValues: row.newValues, ipAddress: row.ipAddress, userAgent: row.userAgent, user: row.user })),
   };
-}, ["swiftwash-audit-ledger-v3"], { tags: [CACHE_TAGS.audit], revalidate: 15 });
+}, ["swiftwash-audit-ledger-v4"], { tags: [CACHE_TAGS.audit], revalidate: 15 });
 
 export function getAuditLedger(action: string | undefined, entity: string | undefined, page: number) {
   return getAuditLedgerForQuery(action?.trim() ?? "", entity?.trim() ?? "", page);

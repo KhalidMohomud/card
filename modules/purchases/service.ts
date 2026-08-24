@@ -1,11 +1,11 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { prisma, type AppTransactionClient } from "@/lib/prisma";
 import { purchaseInput } from "@/lib/validation";
 
 type PurchaseData = ReturnType<typeof purchaseInput.parse>;
 
-async function assertActiveReferences(tx: Prisma.TransactionClient, data: PurchaseData) {
+async function assertActiveReferences(tx: AppTransactionClient, data: PurchaseData) {
   const [supplier, items, paymentMethod] = await Promise.all([
     tx.supplier.findFirst({ where: { id: data.supplierId, isActive: true }, select: { id: true } }),
     tx.inventoryItem.findMany({ where: { id: { in: data.items.map((line) => line.inventoryItemId) }, isActive: true }, select: { id: true } }),

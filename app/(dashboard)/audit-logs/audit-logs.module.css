@@ -36,7 +36,6 @@
 .userCell div { min-width: 0; display: grid; gap: 3px; }
 .userCell strong { overflow: hidden; color: var(--ink); text-overflow: ellipsis; font-size: 13px; }
 .userCell span { overflow: hidden; color: var(--brand-dark); text-overflow: ellipsis; font-size: 11px; font-weight: 700; }
-.userCell small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; font-size: 10px; }
 .clientCell { display: table-cell; }
 .clientCell code { display: block; width: fit-content; max-width: 100%; overflow: hidden; padding: 5px 8px; border: 1px solid #d7e7f5; border-radius: 8px; color: #145f97; background: #f0f7fd; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .clientCell small { display: block; margin-top: 6px; color: var(--muted); font-size: 9px; }

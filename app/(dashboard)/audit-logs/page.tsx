@@ -98,7 +98,7 @@ export default async function AuditLogsPage({ searchParams }: { searchParams: Pr
               const details = detailEntries(log.oldValues, log.newValues);
               return <tr key={log.id}>
                 <td className={styles.whenCell} data-label="When"><time dateTime={log.createdAt}>{formatDateTime(log.createdAt)}</time></td>
-                <td data-label="User account"><div className={styles.userCell}><span className={styles.userAvatar}><UserRound size={16} /></span><div><strong>{log.user?.fullName ?? "System"}</strong>{log.user?.username ? <span>@{log.user.username}</span> : <span>Automated event</span>}{log.user?.email && <small>{log.user.email}</small>}</div></div></td>
+                <td data-label="User account"><div className={styles.userCell}><span className={styles.userAvatar}><UserRound size={16} /></span><div><strong>{log.user?.fullName ?? "System"}</strong><span>{log.user?.username ? `@${log.user.username}` : "Automated event"}</span></div></div></td>
                 <td className={styles.clientCell} data-label="IP address"><code>{log.ipAddress ?? "Not captured"}</code><small>{clientDescription(log.userAgent)}</small></td>
                 <td data-label="Action"><span className={`${styles.actionBadge} ${actionTone(log.action)}`}>{readableLabel(log.action)}</span></td>
                 <td data-label="Entity"><span className={styles.entityName}>{readableLabel(log.entityType)}</span></td>

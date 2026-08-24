@@ -1,6 +1,6 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { prisma, type AppTransactionClient } from "@/lib/prisma";
 import { expenseInput } from "@/lib/validation";
 import { calculateCommission } from "@/modules/business-rules";
 import { businessDateEnd, businessDateInputValue, businessDateStart } from "@/lib/dates";
@@ -11,7 +11,7 @@ export function commissionAmount(carCount: number, ratePerCar: string) {
 
 type ExpenseData = ReturnType<typeof expenseInput.parse>;
 
-async function prepareExpense(data: ExpenseData, db: Prisma.TransactionClient | typeof prisma = prisma) {
+async function prepareExpense(data: ExpenseData, db: AppTransactionClient | typeof prisma = prisma) {
   const [category, supervisor, paymentMethod] = await Promise.all([
     data.type === "GENERAL" && data.categoryId
       ? db.expenseCategory.findFirst({ where: { id: data.categoryId, isActive: true }, select: { id: true } })
