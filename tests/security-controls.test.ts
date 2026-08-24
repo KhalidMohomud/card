@@ -16,6 +16,7 @@ import { createSessionToken, isUsableSessionRecord, sessionTokenDigest } from "@
 import { auditLogFilterInput, issueCloseInput, issueInput, loginInput, purchaseInput, receiptFilterInput, reportFilterInput, settingsInput, stocktakeInput, supervisorInput } from "@/lib/validation";
 import { isEligibleSupervisor } from "@/modules/business-rules";
 import { LOGIN_BLOCK_MS, LOGIN_IP_MAX_ATTEMPTS, LOGIN_WINDOW_MS, nextLoginThrottle } from "@/lib/login-throttle-policy";
+import { formatSseComment, formatSseEvent } from "@/lib/sse";
 
 function mutationRequest(origin?: string, extraHeaders: Record<string, string> = {}) {
   return new Request("https://swiftwash.example/api/login", {
@@ -99,6 +100,16 @@ describe("CSRF and request-boundary controls", () => {
 });
 
 describe("session and authentication controls", () => {
+  it("formats SSE messages without allowing control-field injection", () => {
+    const event = formatSseEvent("system-change", { value: "line\nbreak" }, { id: "safe\nid", retry: 2_500 });
+    expect(event).toContain("id: safeid\n");
+    expect(event).toContain("event: system-change\n");
+    expect(event).toContain("retry: 2500\n");
+    expect(event).toContain("data: {\"value\":\"line\\nbreak\"}\n\n");
+    expect(formatSseComment("heart\nbeat")).toBe(": heartbeat\n\n");
+    expect(() => formatSseEvent("bad\nevent", {})).toThrow("Invalid SSE event name");
+  });
+
   it("generates high-entropy tokens and stores only deterministic digests", () => {
     const first = createSessionToken();
     const second = createSessionToken();

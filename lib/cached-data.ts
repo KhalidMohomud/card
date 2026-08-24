@@ -213,7 +213,7 @@ export function getIssueLedger(search = "", status = "", supervisorId = "", from
   return getIssueLedgerForQuery(search, status, supervisorId, from, to, page);
 }
 
-const getAuditLedgerForQuery = unstable_cache(async (action: string, entity: string, page: number) => {
+async function getAuditLedgerForQuery(action: string, entity: string, page: number) {
   const take = 50;
   const where: Prisma.AuditLogWhereInput = { ...(action ? { action: { contains: action, mode: "insensitive" } } : {}), ...(entity ? { entityType: { contains: entity, mode: "insensitive" } } : {}) };
   const [rows, total, actionOptions, entityOptions] = await Promise.all([
@@ -228,7 +228,7 @@ const getAuditLedgerForQuery = unstable_cache(async (action: string, entity: str
     entities: entityOptions.map((option) => option.entityType),
     rows: rows.map((row) => ({ id: row.id, createdAt: row.createdAt.toISOString(), action: row.action, entityType: row.entityType, entityId: row.entityId, oldValues: row.oldValues, newValues: row.newValues, ipAddress: row.ipAddress, userAgent: row.userAgent, user: row.user })),
   };
-}, ["swiftwash-audit-ledger-v4"], { tags: [CACHE_TAGS.audit], revalidate: 15 });
+}
 
 export function getAuditLedger(action: string | undefined, entity: string | undefined, page: number) {
   return getAuditLedgerForQuery(action?.trim() ?? "", entity?.trim() ?? "", page);

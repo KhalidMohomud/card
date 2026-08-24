@@ -6,6 +6,7 @@ import type { UserRole } from "@prisma/client";
 import { LogoutButton } from "@/components/logout-button";
 import { MobileNavigation } from "@/components/mobile-navigation";
 import { SessionExpiry } from "@/components/session-expiry";
+import { LiveSystemEvents } from "@/components/live-system-events";
 import { DesktopInventoryNavigation } from "@/components/inventory-navigation";
 import companyLogo from "@/logo.jpeg";
 
@@ -45,7 +46,11 @@ export function Shell({ user, children }: { user: { fullName: string; username?:
     <main className="main">
       <header className="topbar">
         <div><p>EcofriendLC operations</p>
-        </div><SessionExpiry expiresAt={user.sessionExpiresAt} />
+        </div>
+        <div className="topbar-status">
+          <LiveSystemEvents />
+          <SessionExpiry expiresAt={user.sessionExpiresAt} />
+        </div>
       </header>{children}
     </main>
     <MobileNavigation user={user} />
