@@ -216,12 +216,19 @@ export function getIssueLedger(search = "", status = "", supervisorId = "", from
 const getAuditLedgerForQuery = unstable_cache(async (action: string, entity: string, page: number) => {
   const take = 50;
   const where: Prisma.AuditLogWhereInput = { ...(action ? { action: { contains: action, mode: "insensitive" } } : {}), ...(entity ? { entityType: { contains: entity, mode: "insensitive" } } : {}) };
-  const [rows, total] = await Promise.all([
-    prisma.auditLog.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * take, take, select: { id: true, createdAt: true, action: true, entityType: true, entityId: true, newValues: true, user: { select: { fullName: true } } } }),
+  const [rows, total, actionOptions, entityOptions] = await Promise.all([
+    prisma.auditLog.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * take, take, select: { id: true, createdAt: true, action: true, entityType: true, entityId: true, newValues: true, user: { select: { fullName: true, username: true, email: true } } } }),
     prisma.auditLog.count({ where }),
+    prisma.auditLog.findMany({ distinct: ["action"], orderBy: { action: "asc" }, select: { action: true } }),
+    prisma.auditLog.findMany({ distinct: ["entityType"], orderBy: { entityType: "asc" }, select: { entityType: true } }),
   ]);
-  return { total, rows: rows.map((row) => ({ id: row.id, createdAt: row.createdAt.toISOString(), action: row.action, entityType: row.entityType, entityId: row.entityId, newValues: row.newValues, user: row.user })) };
-}, ["swiftwash-audit-ledger-v1"], { tags: [CACHE_TAGS.audit], revalidate: 15 });
+  return {
+    total,
+    actions: actionOptions.map((option) => option.action),
+    entities: entityOptions.map((option) => option.entityType),
+    rows: rows.map((row) => ({ id: row.id, createdAt: row.createdAt.toISOString(), action: row.action, entityType: row.entityType, entityId: row.entityId, newValues: row.newValues, user: row.user })),
+  };
+}, ["swiftwash-audit-ledger-v2"], { tags: [CACHE_TAGS.audit], revalidate: 15 });
 
 export function getAuditLedger(action: string | undefined, entity: string | undefined, page: number) {
   return getAuditLedgerForQuery(action?.trim() ?? "", entity?.trim() ?? "", page);
