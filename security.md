@@ -32,7 +32,7 @@ No SQL injection, stored/reflected XSS, unsafe raw Prisma query use, client-cont
 | A04 Cryptographic Failures | Pass | Passwords use salted scrypt hashes; sessions use high-entropy opaque tokens and store only SHA-256 token digests; cookies are HttpOnly, SameSite Strict, Secure in production, short-lived, and database-revocable; PostgreSQL connection configuration requires TLS |
 | A05 Injection | Pass | Zod validation and bounds; parameterized Prisma methods/tagged templates only; no unsafe Prisma raw APIs; React output escaping; CSV formula neutralization; strict username and filter allowlists |
 | A06 Insecure Design | Improved | Database-backed login throttling, dummy password verification for unknown users, idempotent receipt creation, short sessions, fail-closed origin checks, bounded request bodies, report range/row limits, and bounded pagination |
-| A07 Authentication Failures | Pass | Generic invalid-credential response, account-active check, timing-resistant unknown-user path, five-attempt throttle and block window, session rotation on login, server-side logout revocation, expired-session rejection |
+| A07 Authentication Failures | Pass | Generic invalid-credential response, account-active check, timing-resistant unknown-user path, database-backed brute-force protection (5 username failures or 25 shared-IP failures in 15 minutes), session rotation on login, server-side logout revocation, expired-session rejection |
 | A08 Software or Data Integrity Failures | Pass with operational recommendation | Deterministic lockfiles, dependency audit, transactional business writes, idempotency keys, and audit records. Add automated dependency review and protected CI before production releases |
 | A09 Security Logging and Alerting Failures | Pass with operational recommendation | Login success/failure/block/rejection/internal errors and business-critical mutations are audited with validated proxy metadata. Export logs to append-only external storage and alert on repeated failures in production |
 | A10 Mishandling of Exceptional Conditions | Fixed | Malformed JSON returns 400, oversized requests 413, unsupported media 415, unavailable catalog data 409, authorization failure 403, and unexpected receipt errors 500. Errors expose generic messages and log only the error class/name |
@@ -69,7 +69,7 @@ Patched versions are pinned through npm and pnpm overrides and recorded in both 
 
 | Check | Result |
 | --- | --- |
-| Automated security/unit tests | 5 files passed; 38 tests passed |
+| Automated security/unit tests | 5 files passed; 39 tests passed |
 | Production build and TypeScript | Passed with Next.js 16.2.12 |
 | ESLint | 0 errors; 2 unrelated unused-symbol warnings in the reports page |
 | Patch whitespace validation | Passed |
@@ -127,4 +127,3 @@ Runtime checks against the optimized local production server:
 
 - OWASP Top 10:2025: https://owasp.org/Top10/
 - OWASP Top 10 project: https://owasp.org/www-project-top-ten/
-

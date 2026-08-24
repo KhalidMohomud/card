@@ -15,7 +15,7 @@ import {
 import { createSessionToken, isUsableSessionRecord, sessionTokenDigest } from "@/lib/session-token";
 import { auditLogFilterInput, issueCloseInput, issueInput, loginInput, purchaseInput, receiptFilterInput, reportFilterInput, settingsInput, stocktakeInput, supervisorInput } from "@/lib/validation";
 import { isEligibleSupervisor } from "@/modules/business-rules";
-import { LOGIN_BLOCK_MS, nextLoginThrottle } from "@/lib/login-throttle-policy";
+import { LOGIN_BLOCK_MS, LOGIN_IP_MAX_ATTEMPTS, LOGIN_WINDOW_MS, nextLoginThrottle } from "@/lib/login-throttle-policy";
 
 function mutationRequest(origin?: string, extraHeaders: Record<string, string> = {}) {
   return new Request("https://swiftwash.example/api/login", {
@@ -116,15 +116,20 @@ describe("session and authentication controls", () => {
     expect(isUsableSessionRecord(new Date(now + 1_000), false, now)).toBe(false);
   });
 
-  it("allows five attempts, blocks before a sixth verification, and resets after the window", () => {
+  it("blocks a username on the fifth failed attempt and resets after the window", () => {
     const now = new Date("2026-08-01T08:00:00.000Z");
     const fifth = nextLoginThrottle({ attempts: 4, windowStartedAt: new Date(now.getTime() - 1_000), blockedUntil: null }, now);
     expect(fifth.attempts).toBe(5);
-    expect(fifth.blockedUntil).toBeNull();
-    const sixth = nextLoginThrottle({ attempts: fifth.attempts, windowStartedAt: fifth.windowStartedAt, blockedUntil: fifth.blockedUntil }, now);
-    expect(sixth.blockedUntil?.getTime()).toBe(now.getTime() + LOGIN_BLOCK_MS);
-    const reset = nextLoginThrottle({ attempts: 99, windowStartedAt: new Date(now.getTime() - 61_000), blockedUntil: null }, now);
+    expect(fifth.blockedUntil?.getTime()).toBe(now.getTime() + LOGIN_BLOCK_MS);
+    const reset = nextLoginThrottle({ attempts: 99, windowStartedAt: new Date(now.getTime() - LOGIN_WINDOW_MS - 1), blockedUntil: null }, now);
     expect(reset.attempts).toBe(1);
+  });
+
+  it("uses a higher threshold for shared IP addresses", () => {
+    const now = new Date("2026-08-01T08:00:00.000Z");
+    const result = nextLoginThrottle({ attempts: LOGIN_IP_MAX_ATTEMPTS - 1, windowStartedAt: new Date(now.getTime() - 1_000), blockedUntil: null }, now, LOGIN_IP_MAX_ATTEMPTS);
+    expect(result.attempts).toBe(LOGIN_IP_MAX_ATTEMPTS);
+    expect(result.blockedUntil?.getTime()).toBe(now.getTime() + LOGIN_BLOCK_MS);
   });
 
   it("normalizes usernames and rejects SQL-like credential payloads", () => {

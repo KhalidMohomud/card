@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { after } from "next/server";
 import { audit } from "@/lib/audit";
 import { createDatabaseSession, getClientIp, getRawSessionToken, revokeSessionToken, setSessionCookie } from "@/lib/auth-session";
-import { clearLoginFailures, loginBlockSeconds, loginThrottleKeys, registerLoginAttempt } from "@/lib/login-throttle";
+import { clearLoginFailures, loginBlockSeconds, loginThrottleKeys, registerLoginFailure, usernameThrottleKey } from "@/lib/login-throttle";
 import { verifyPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 import { hasJsonContentType, isSameOriginMutation, readLimitedJson, RequestBodyTooLargeError } from "@/lib/request-security";
@@ -41,17 +41,16 @@ export async function POST(request: Request) {
       response.headers.set("Retry-After", String(retryAfter));
       return noStore(response);
     }
-    const nowBlocked = await registerLoginAttempt(keys);
-    if (nowBlocked) {
-      after(() => audit({ action: "LOGIN_BLOCKED", entityType: "User", newValues: { username, reason: "RATE_LIMIT" } }).catch(() => undefined));
-      const response = NextResponse.json({ message: "Too many sign-in attempts. Try again in 15 minutes." }, { status: 429 });
-      response.headers.set("Retry-After", String(15 * 60));
-      return noStore(response);
-    }
-
     const user = await prisma.user.findUnique({ where: { username }, select: { id: true, fullName: true, username: true, role: true, isActive: true, accounts: { where: { providerId: "credential" }, take: 1, select: { password: true } } } });
     const passwordMatches = await verifyPassword(user?.accounts[0]?.password ?? DUMMY_PASSWORD_HASH, data.password);
     if (!user || !user.isActive || !passwordMatches) {
+      const nowBlocked = await registerLoginFailure(keys);
+      if (nowBlocked) {
+        after(() => audit({ action: "LOGIN_BLOCKED", entityType: "User", newValues: { username, reason: "BRUTE_FORCE_PROTECTION", durationMinutes: 15 } }).catch(() => undefined));
+        const response = NextResponse.json({ message: "Too many failed sign-in attempts. Try again in 15 minutes." }, { status: 429 });
+        response.headers.set("Retry-After", String(15 * 60));
+        return noStore(response);
+      }
       after(() => audit({ action: "LOGIN_FAILED", entityType: "User", newValues: { username, reason: user?.isActive === false ? "INACTIVE_OR_INVALID" : "INVALID_CREDENTIALS" } }).catch(() => undefined));
       return noStore(NextResponse.json({ message: "Invalid username or password." }, { status: 401 }));
     }
@@ -60,7 +59,9 @@ export async function POST(request: Request) {
     // browser, preventing stale or attacker-supplied tokens from surviving.
     await revokeSessionToken(await getRawSessionToken());
     const session = await createDatabaseSession(user.id, request);
-    await clearLoginFailures(keys);
+    // A valid login clears only that username's failures. The shared IP
+    // counter remains intact so an attacker cannot reset it with another account.
+    await clearLoginFailures([usernameThrottleKey(keys)]);
     const response = NextResponse.json({ user: { id: user.id, fullName: user.fullName, username: user.username, role: user.role }, expiresAt: session.expiresAt.toISOString() });
     setSessionCookie(response, session.rawToken, session.expiresAt); clearSessionCookieLegacyOnly(response);
     after(() => Promise.all([
