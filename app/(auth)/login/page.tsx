@@ -24,9 +24,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       </span>
     </div>
       <div>
-        <span className="eyebrow" style={{ color: "#6fe0b7" }}>Every wash.</span>
+        <span className="eyebrow" style={{ color: "#9bd5ff" }}>Every wash.</span>
         <h1>Clean cars.<br />Clear numbers.</h1>
-      </div><small style={{ color: "#8fb5a8" }}>Protected by secure, server-side sessions</small>
+      </div><small style={{ color: "#a7cbe8" }}>Protected by secure, server-side sessions</small>
     </section>
     <section className="login-panel">
       <div className="login-card">

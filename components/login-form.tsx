@@ -35,14 +35,14 @@ export function LoginForm() {
     <div className="field">
       <label htmlFor="username">Username</label>
       <div style={{ position: "relative" }}>
-        <UserRound size={18} style={{ position: "absolute", left: 14, top: 16, color: "#71817c" }} />
+        <UserRound size={18} style={{ position: "absolute", left: 14, top: 16, color: "#71849a" }} />
         <input className="input" style={{ paddingLeft: 43 }} id="username" name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="ayuub or @ayuub" required />
       </div>
     </div>
     <div className="field">
       <label htmlFor="password">Password</label>
       <div style={{ position: "relative" }}>
-        <LockKeyhole size={18} style={{ position: "absolute", left: 14, top: 16, color: "#71817c" }} />
+        <LockKeyhole size={18} style={{ position: "absolute", left: 14, top: 16, color: "#71849a" }} />
         <input className="input" style={{ paddingLeft: 43, paddingRight: 46 }} id="password" name="password" type={showPassword ? "text" : "password"} maxLength={128} autoComplete="current-password" required />
         <button className="password-visibility" type="button" aria-label={showPassword ? "Hide password" : "Show password"}
           aria-pressed={showPassword} onClick={() => setShowPassword((visible) => !visible)}>{showPassword ?
