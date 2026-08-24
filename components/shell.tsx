@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Fragment } from "react";
 import { BarChart3, Droplets, FileClock, HandCoins, LayoutDashboard, PackagePlus, ReceiptText, Settings, ShoppingCart, UsersRound } from "lucide-react";
@@ -6,6 +7,7 @@ import { LogoutButton } from "@/components/logout-button";
 import { MobileNavigation } from "@/components/mobile-navigation";
 import { SessionExpiry } from "@/components/session-expiry";
 import { DesktopInventoryNavigation } from "@/components/inventory-navigation";
+import companyLogo from "@/logo.jpeg";
 
 const managementLinks = [
   ["Dashboard", "/dashboard", LayoutDashboard], ["POS", "/pos", ShoppingCart], ["Receipts", "/receipts", ReceiptText],
@@ -25,11 +27,11 @@ export function Shell({ user, children }: { user: { fullName: string; username?:
     <aside className="sidebar">
       <Link className="brand" href={homeHref}>
         <span className="brand-mark">
-          <Droplets size={23} />
+          <Image className="brand-logo" src={companyLogo} alt="" priority />
         </span>
         <span>
-          <strong>SwiftWash</strong>
-          <small>Operations POS</small>
+          <strong>EcofriendLC</strong>
+          <small>Car wash POS</small>
         </span>
       </Link>
       <nav className="nav">{links.map(([label, href, Icon]) => <Fragment key={href}>{label === "Purchases" && <DesktopInventoryNavigation />}<Link className="nav-link" href={href}><Icon size={18} />{label}</Link></Fragment>)}
@@ -42,7 +44,7 @@ export function Shell({ user, children }: { user: { fullName: string; username?:
     </aside>
     <main className="main">
       <header className="topbar">
-        <div><p>Car wash operations</p>
+        <div><p>EcofriendLC operations</p>
         </div><SessionExpiry expiresAt={user.sessionExpiresAt} />
       </header>{children}
     </main>
